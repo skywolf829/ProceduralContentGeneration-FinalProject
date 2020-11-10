@@ -11,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument('--epochs',type=int,default=20,help="Number of epochs to train")
-    parser.add_argument('--batch',type=int,default=8,help="Batch size")
+    parser.add_argument('--batch',type=int,default=1,help="Batch size")
     parser.add_argument('--num_workers',type=int,default=8,help="Number of workers to load data in parallel")
     parser.add_argument('--training_folder',type=str,default="NumpyRawDataCropped",help="Folder that has training data")
     parser.add_argument('--device',type=str,default="cuda:0",help="What device to use for training")
@@ -47,9 +47,10 @@ if __name__ == '__main__':
 
     iteration = 0
     for epoch in range(args['epochs']):
+        print("Starting epoch %i" % (epoch))
         for i, (real_heightmaps) in enumerate(dataloader):
             real_heightmaps = real_heightmaps.to(args['device'])
-            rand_input = torch.randn([args['batch'], 1, 16, 16], 
+            rand_input = torch.randn([args['batch'], 16], 
             device=args['device'])
             generated = g(rand_input)
             # Update discriminator: maximize D(x) + D(G(z))            
@@ -77,7 +78,7 @@ if __name__ == '__main__':
                 g.zero_grad()
 
                 # Train to trick the discriminator
-                rand_input = torch.randn([args['batch'], 1, 16, 16], 
+                rand_input = torch.randn([args['batch'], 16], 
                 device=args['device'])
                 generated = g(rand_input)
                 output = d(generated)
@@ -105,12 +106,9 @@ if __name__ == '__main__':
                      (real_heightmaps[0] - real_heightmaps[0].min()) \
                      / (real_heightmaps[0].max() - real_heightmaps[0].min()), 
                      epoch*len(dataset) + i)
-                writer.add_image('rand_input', 
-                    (rand_input[0] - rand_input[0].min()) \
-                     / (rand_input[0].max() - rand_input[0].min()), 
-                     epoch*len(dataset) + i)
+                     
 
             iteration += 1
-            
+
         if(epoch % args['save_every'] == 0):
             save_models(g, d, args['save_name'])

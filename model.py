@@ -60,120 +60,169 @@ def weights_init(m):
 
 # input parameters: [smooth/jagged, steepness, elevation]
 class generator(nn.Module):
-    def __init__ (self, device):
+    def __init__ (self, device, k=16):
         super(generator, self).__init__()
         self.device = device
         modules = []
-
+        self.k = k
         self.upscale = nn.Upsample(scale_factor=2,mode="bilinear",
         align_corners=False)
 
-        # In 1x16x16, out 1024x16x16
-        self.resConv1 = nn.Conv2d(1, 1024, kernel_size=1, 
+        # Input is 16, output is 256
+        self.fc1 = nn.Linear(16, 512)
+        self.fc2 = nn.Linear(512, 512)
+        self.fc3 = nn.Linear(512, 512*k)
+
+        # In 32*kx4x4, out 32*kx8x8
+        self.resConv1 = nn.Conv2d(32*k, 32*k, kernel_size=1, 
         stride=1, padding=0)
         self.convBlock1 = nn.Sequential(
-            nn.BatchNorm2d(1),
+            nn.BatchNorm2d(32*k),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(1, 1024, kernel_size=3, stride=1, 
+            nn.Upsample(scale_factor=2,mode="bilinear",
+            align_corners=False),
+            nn.Conv2d(32*k, 32*k, kernel_size=3, stride=1, 
             padding=1),
-            nn.BatchNorm2d(1024),
+            nn.BatchNorm2d(32*k),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(1024, 1024, kernel_size=3, stride=1, 
+            nn.Conv2d(32*k, 32*k, kernel_size=3, stride=1, 
             padding=1)
         )
-        # In 1024x16x16, out 256x32x32
-        self.resConv2 = nn.Conv2d(1024, 256, kernel_size=1, 
+        # In 32*kx8x8, out 16*kx16x16
+        self.resConv2 = nn.Conv2d(32*k, 16*k, kernel_size=1, 
         stride=1, padding=0)
         self.convBlock2 = nn.Sequential(
-            nn.BatchNorm2d(1024),
+            nn.BatchNorm2d(32*k),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Upsample(scale_factor=2,mode="bilinear",
             align_corners=False),
-            nn.Conv2d(1024, 256, kernel_size=3, stride=1, 
+            nn.Conv2d(32*k, 16*k, kernel_size=3, stride=1, 
             padding=1),
-            nn.BatchNorm2d(256),
+            nn.BatchNorm2d(16*k),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, 
+            nn.Conv2d(16*k, 16*k, kernel_size=3, stride=1, 
             padding=1)
         )
-        # In 256x32x32, out 64x64x64
-        self.resConv3 = nn.Conv2d(256, 64, kernel_size=1, 
+        # In 16*kx16x16, out 16*kx32x32
+        self.resConv3 = nn.Conv2d(16*k, 16*k, kernel_size=1, 
         stride=1, padding=0)
         self.convBlock3 = nn.Sequential(
-            nn.BatchNorm2d(256),
+            nn.BatchNorm2d(16*k),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Upsample(scale_factor=2,mode="bilinear",
             align_corners=False),
-            nn.Conv2d(256, 64, kernel_size=3, stride=1, 
+            nn.Conv2d(16*k, 16*k, kernel_size=3, stride=1, 
             padding=1),
-            nn.BatchNorm2d(64),
+            nn.BatchNorm2d(16*k),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, 
+            nn.Conv2d(16*k, 16*k, kernel_size=3, stride=1, 
             padding=1)
         )
-        # In 64x64x64, out 16x128x128
-        self.resConv4 = nn.Conv2d(64, 16, kernel_size=1, 
+        # In 16*kx32x32, out 8*kx64x64 
+        self.resConv4 = nn.Conv2d(16*k, 8*k, kernel_size=1, 
         stride=1, padding=0)
         self.convBlock4 = nn.Sequential(
-            nn.BatchNorm2d(64),
+            nn.BatchNorm2d(16*k),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Upsample(scale_factor=2,mode="bilinear",
             align_corners=False),
-            nn.Conv2d(64, 16, kernel_size=3, stride=1, 
+            nn.Conv2d(16*k, 8*k, kernel_size=3, stride=1, 
             padding=1),
-            nn.BatchNorm2d(16),
+            nn.BatchNorm2d(8*k),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(16, 16, kernel_size=3, stride=1, 
+            nn.Conv2d(8*k, 8*k, kernel_size=3, stride=1, 
             padding=1)
         )
-        # In 16x128x128, out 4x256x256
-        self.resConv5 = nn.Conv2d(16, 4, kernel_size=1, 
+        # In 8*kx64x64, out 4*kx128x128
+        self.resConv5 = nn.Conv2d(8*k, 4*k, kernel_size=1, 
         stride=1, padding=0)
         self.convBlock5 = nn.Sequential(
-            nn.BatchNorm2d(16),
+            nn.BatchNorm2d(8*k),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Upsample(scale_factor=2,mode="bilinear",
             align_corners=False),
-            nn.Conv2d(16, 4, kernel_size=3, stride=1, 
+            nn.Conv2d(8*k, 4*k, kernel_size=3, stride=1, 
             padding=1),
-            nn.BatchNorm2d(4),
+            nn.BatchNorm2d(4*k),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(4, 4, kernel_size=3, stride=1, 
+            nn.Conv2d(4*k, 4*k, kernel_size=3, stride=1, 
             padding=1)
         )
-        # In 4x256x256, out 1x512x512
+        # In 4*kx128x128, out 2*kx256x256
+        self.resConv6 = nn.Conv2d(4*k, 2*k, kernel_size=1, 
+        stride=1, padding=0)
         self.convBlock6 = nn.Sequential(
-            nn.BatchNorm2d(4),
+            nn.BatchNorm2d(4*k),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Upsample(scale_factor=2,mode="bilinear",
             align_corners=False),
-            nn.Conv2d(4, 1, kernel_size=3, stride=1, 
+            nn.Conv2d(4*k, 2*k, kernel_size=3, stride=1, 
             padding=1),
-            nn.BatchNorm2d(1),
+            nn.BatchNorm2d(2*k),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(1, 1, kernel_size=3, stride=1, 
+            nn.Conv2d(2*k, 2*k, kernel_size=3, stride=1, 
+            padding=1)
+        )
+        # In 2*kx256x256, out 1*kx512x512
+        self.resConv7 = nn.Conv2d(2*k, 1*k, kernel_size=1, 
+        stride=1, padding=0)
+        self.convBlock7 = nn.Sequential(
+            nn.BatchNorm2d(2*k),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2,mode="bilinear",
+            align_corners=False),
+            nn.Conv2d(2*k, 1*k, kernel_size=3, stride=1, 
+            padding=1),
+            nn.BatchNorm2d(1*k),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(1*k, 1*k, kernel_size=3, stride=1, 
+            padding=1)
+        )
+        
+        # In 1x512x512, out 1x512x512
+        self.convBlock8 = nn.Sequential(
+            nn.BatchNorm2d(1*k),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(1*k, 1, kernel_size=3, stride=1, 
             padding=1)
         )
 
         self.activation = nn.Tanh()
 
     def forward(self, x):
-        res = self.convBlock1(x)
-        x = res + self.resConv1(x)
+        x = self.fc1(x)
+        x = self.fc2(x)
+        x = self.fc3(x)
+        x = x.reshape(x.shape[0], 32*self.k, 4, 4)
 
-        res = self.convBlock2(x)
+        res = self.convBlock1(x)
+        x = res + self.resConv1(self.upscale(x))
+
+        res = self.convBlock2(x + \
+        torch.randn(x.shape,device=self.device))
         x = res + self.resConv2(self.upscale(x))
 
-        res = self.convBlock3(x)
+        res = self.convBlock3(x + \
+        torch.randn(x.shape,device=self.device))
         x = res + self.resConv3(self.upscale(x))
 
-        res = self.convBlock4(x)
+        res = self.convBlock4(x + \
+        torch.randn(x.shape,device=self.device))
         x = res + self.resConv4(self.upscale(x))
 
-        res = self.convBlock5(x)
+        res = self.convBlock5(x + \
+        torch.randn(x.shape,device=self.device))
         x = res + self.resConv5(self.upscale(x))
         
-        x = self.convBlock6(x)
+        res = self.convBlock6(x + \
+        torch.randn(x.shape,device=self.device))
+        x = res + self.resConv6(self.upscale(x))
+
+        res = self.convBlock7(x + \
+        torch.randn(x.shape,device=self.device))
+        x = res + self.resConv7(self.upscale(x))
+
+        x = self.convBlock8(x)
         x = self.activation(x)
 
         return x
