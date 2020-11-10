@@ -142,8 +142,6 @@ class generator(nn.Module):
             padding=1)
         )
         # In 4x256x256, out 1x512x512
-        self.resConv6 = nn.Conv2d(4, 1, kernel_size=1, 
-        stride=1, padding=0)
         self.convBlock6 = nn.Sequential(
             nn.BatchNorm2d(4),
             nn.LeakyReLU(0.2, inplace=True),
@@ -175,9 +173,7 @@ class generator(nn.Module):
         res = self.convBlock5(x)
         x = res + self.resConv5(self.upscale(x))
         
-        res = self.convBlock6(x)
-        x = res + self.resConv6(self.upscale(x))
-
+        x = self.convBlock6(x)
         x = self.activation(x)
 
         return x
@@ -261,7 +257,7 @@ class Dataset(torch.utils.data.Dataset):
         
 
     def __len__(self):
-        return len(self.items) - 1
+        return len(self.items)
 
     def __getitem__(self, index):
         data = np.load(os.path.join(self.dataset_location, 
@@ -272,7 +268,7 @@ class Dataset(torch.utils.data.Dataset):
         data *= 2 / (self.max - self.min)
         data -= 1
         '''
-        data -= data.min() - 1e-4
-        data *= (2/(data.max()+1e-4))
+        data -= data.min() - 1
+        data *= (2/(data.max()+2))
         data -= 1
         return data.unsqueeze(0)

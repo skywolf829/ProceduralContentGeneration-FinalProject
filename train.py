@@ -10,15 +10,15 @@ from torch.utils.tensorboard import SummaryWriter
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a model')
-    parser.add_argument('--epochs',type=int,default=20)
-    parser.add_argument('--batch',type=int,default=6)
-    parser.add_argument('--num_workers',type=int,default=8)
-    parser.add_argument('--training_folder',type=str,default="NumpyRawDataCropped")
-    parser.add_argument('--device',type=str,default="cuda:0")
-    parser.add_argument('--load_from',type=str,default=None)
-    parser.add_argument('--log_every',type=int,default=1)
-    parser.add_argument('--save_every',type=int,default=1)
-    parser.add_argument('--save_name',type=str,default="Temp")
+    parser.add_argument('--epochs',type=int,default=20,help="Number of epochs to train")
+    parser.add_argument('--batch',type=int,default=8,help="Batch size")
+    parser.add_argument('--num_workers',type=int,default=8,help="Number of workers to load data in parallel")
+    parser.add_argument('--training_folder',type=str,default="NumpyRawDataCropped",help="Folder that has training data")
+    parser.add_argument('--device',type=str,default="cuda:0",help="What device to use for training")
+    parser.add_argument('--load_from',type=str,default=None,help="If resuming training, where to load from")
+    parser.add_argument('--log_every',type=int,default=10,help="How often to log using tensorboard")
+    parser.add_argument('--save_every',type=int,default=1,help="How often (# epochs) to save the model")
+    parser.add_argument('--save_name',type=str,default="Temp",help="Name to save the model as")
     args = vars(parser.parse_args())
 
     dataset = Dataset(args['training_folder'])
@@ -39,12 +39,13 @@ if __name__ == '__main__':
 
 
     generator_optimizer = optim.Adam(g.parameters(), 
-    lr=0.001, betas=(0.5,0.99))
+    lr=0.0005, betas=(0.5,0.99))
     discriminator_optimizer = optim.Adam(d.parameters(), 
-    lr=0.001, betas=(0.5,0.99))
+    lr=0.0005, betas=(0.5,0.99))
 
     writer = SummaryWriter(os.path.join('tensorboard',args['save_name']))
 
+    iteration = 0
     for epoch in range(args['epochs']):
         for i, (real_heightmaps) in enumerate(dataloader):
             real_heightmaps = real_heightmaps.to(args['device'])
@@ -88,7 +89,7 @@ if __name__ == '__main__':
 
                 generator_optimizer.step()
                 
-            if(i % args['log_every'] == 0):
+            if(iteration % args['log_every'] == 0):
                 writer.add_scalar('D_loss',
                 discrim_error_real.item() + discrim_error_fake.item(), 
                 epoch*len(dataset) + i) 
@@ -109,5 +110,7 @@ if __name__ == '__main__':
                      / (rand_input[0].max() - rand_input[0].min()), 
                      epoch*len(dataset) + i)
 
+            iteration += 1
+            
         if(epoch % args['save_every'] == 0):
             save_models(g, d, args['save_name'])
