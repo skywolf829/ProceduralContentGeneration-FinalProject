@@ -93,19 +93,19 @@ if __name__ == '__main__':
             if(iteration % args['log_every'] == 0):
                 writer.add_scalar('D_loss',
                 discrim_error_real.item() + discrim_error_fake.item(), 
-                epoch*len(dataset) + i) 
+                iteration) 
                 writer.add_scalar('G_loss',
                 generator_error.item(), 
-                epoch*len(dataset) + i) 
+                iteration) 
 
                 writer.add_image('generated', 
                     (generated[0] - generated[0].min()) \
                      / (generated[0].max() - generated[0].min()), 
-                     epoch*len(dataset) + i)
+                     iteration)
                 writer.add_image('real', 
                      (real_heightmaps[0] - real_heightmaps[0].min()) \
                      / (real_heightmaps[0].max() - real_heightmaps[0].min()), 
-                     epoch*len(dataset) + i)
+                     iteration)
                      
 
             iteration += 1
