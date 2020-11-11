@@ -50,7 +50,7 @@ if __name__ == '__main__':
         print("Starting epoch %i" % (epoch))
         for i, (real_heightmaps) in enumerate(dataloader):
             real_heightmaps = real_heightmaps.to(args['device'])
-            rand_input = torch.randn([args['batch'], 16], 
+            rand_input = torch.randn([real_heightmaps.shape[0], 16], 
             device=args['device'])
             generated = g(rand_input)
             # Update discriminator: maximize D(x) + D(G(z))            
@@ -78,7 +78,7 @@ if __name__ == '__main__':
                 g.zero_grad()
 
                 # Train to trick the discriminator
-                rand_input = torch.randn([args['batch'], 16], 
+                rand_input = torch.randn([real_heightmaps.shape[0], 16], 
                 device=args['device'])
                 generated = g(rand_input)
                 output = d(generated)
