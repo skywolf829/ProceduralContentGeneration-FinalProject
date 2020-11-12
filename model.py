@@ -23,7 +23,7 @@ def load_models(folder, device):
 
     gen_params = torch.load(os.path.join(folder, "model.generator"),
     map_location=device)
-    discrim_params = torch.load(os.path.join(folder, "model.discriminators"),
+    discrim_params = torch.load(os.path.join(folder, "model.discriminator"),
     map_location=device)
     
     generator.load_state_dict(gen_params)
