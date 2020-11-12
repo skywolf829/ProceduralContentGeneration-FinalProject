@@ -220,28 +220,28 @@ class generator(nn.Module):
         x = self.convBlock1(x)
         heightmap = self.toHeight1(x)
 
-        x = self.convBlock2(x)# + \
-        #torch.randn(x.shape,device=self.device))
+        x = self.convBlock2(x + \
+        torch.randn(x.shape,device=self.device))
         heightmap = self.upscale(heightmap) + self.toHeight2(x)
 
-        x = self.convBlock3(x)# + \
-        #torch.randn(x.shape,device=self.device))
+        x = self.convBlock3(x + \
+        torch.randn(x.shape,device=self.device))
         heightmap = self.upscale(heightmap) + self.toHeight3(x)
 
-        x = self.convBlock4(x)# + \
-        #torch.randn(x.shape,device=self.device))
+        x = self.convBlock4(x + \
+        torch.randn(x.shape,device=self.device))
         heightmap = self.upscale(heightmap) + self.toHeight4(x)
 
-        x = self.convBlock5(x)# + \
-        #torch.randn(x.shape,device=self.device))
+        x = self.convBlock5(x + \
+        torch.randn(x.shape,device=self.device))
         heightmap = self.upscale(heightmap) + self.toHeight5(x)
         
-        x = self.convBlock6(x)# + \
-        #torch.randn(x.shape,device=self.device))
+        x = self.convBlock6(x + \
+        torch.randn(x.shape,device=self.device))
         heightmap = self.upscale(heightmap) + self.toHeight6(x)
 
-        x = self.convBlock7(x)# + \
-        #torch.randn(x.shape,device=self.device))
+        x = self.convBlock7(x + \
+        torch.randn(x.shape,device=self.device))
         heightmap = self.upscale(heightmap) + self.toHeight7(x)
 
         #heightmap = self.activation(heightmap)
