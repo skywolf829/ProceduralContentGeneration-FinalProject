@@ -5,6 +5,7 @@ import os
 import numpy as np
 from utility import *
 import pandas as pd
+from kornia.filters import filter2D
 
 def save_models(g, d, location):
     folder = create_folder("SavedModels", location)
@@ -50,12 +51,29 @@ def calc_gradient_penalty(discrim, real_data, fake_data, device):
     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
     return gradient_penalty
 
+def feature_distance(img1, img2, device):
+    if(features_model is None):
+        model = models.vgg19(pretrained=True).to(device=device)
+        model.eval()
+        layer = model.features
+
+    if(img1.shape[1] == 1):
+        img1 = torch.repeat(img1, 3, axis=1)    
+    if(img2.shape[1] == 1):
+        img2 = torch.repeat(img2, 3, axis=1)
+
+    img1_feature_vector = layer(img1_tensor)
+    img2_feature_vector = layer(img2_tensor)
+    
+    return ((img1_feature_vector - img2_feature_vector) ** 2).mean()
+
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv2d') != -1:
         m.weight.data.normal_(0.0, 0.02)
-    elif classname.find('Linear') != -1:
-        m.weight.data.normal_(0.0, 0.02)
+    elif type(m) == nn.Linear:
+        torch.nn.init.xavier_uniform(m.weight)
+        m.bias.data.fill_(0.01)
     elif classname.find('Norm') != -1:
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
@@ -73,11 +91,11 @@ class generator(nn.Module):
         # Input is 16, output is 256
         self.fc1 = nn.Linear(16, 512)
         self.fc2 = nn.Linear(512, 512)
-        self.fc3 = nn.Linear(512, 512*k)
+        self.fc3 = nn.Linear(512, 512)
+        self.fc4 = nn.Linear(512, 512)
+        self.fc5 = nn.Linear(512, 512*k)
 
         # In 32*kx4x4, out 32*kx8x8
-        self.resConv1 = nn.Conv2d(32*k, 32*k, kernel_size=1, 
-        stride=1, padding=0)
         self.convBlock1 = nn.Sequential(
             nn.BatchNorm2d(32*k),
             nn.LeakyReLU(0.2, inplace=True),
@@ -90,9 +108,10 @@ class generator(nn.Module):
             nn.Conv2d(32*k, 32*k, kernel_size=3, stride=1, 
             padding=1)
         )
-        # In 32*kx8x8, out 16*kx16x16
-        self.resConv2 = nn.Conv2d(32*k, 16*k, kernel_size=1, 
+        self.toHeight1 = nn.Conv2d(32*k, 1, kernel_size=1,
         stride=1, padding=0)
+
+        # In 32*kx8x8, out 16*kx16x16
         self.convBlock2 = nn.Sequential(
             nn.BatchNorm2d(32*k),
             nn.LeakyReLU(0.2, inplace=True),
@@ -105,9 +124,10 @@ class generator(nn.Module):
             nn.Conv2d(16*k, 16*k, kernel_size=3, stride=1, 
             padding=1)
         )
-        # In 16*kx16x16, out 16*kx32x32
-        self.resConv3 = nn.Conv2d(16*k, 16*k, kernel_size=1, 
+        self.toHeight2 = nn.Conv2d(16*k, 1, kernel_size=1,
         stride=1, padding=0)
+
+        # In 16*kx16x16, out 16*kx32x32
         self.convBlock3 = nn.Sequential(
             nn.BatchNorm2d(16*k),
             nn.LeakyReLU(0.2, inplace=True),
@@ -120,9 +140,10 @@ class generator(nn.Module):
             nn.Conv2d(16*k, 16*k, kernel_size=3, stride=1, 
             padding=1)
         )
-        # In 16*kx32x32, out 8*kx64x64 
-        self.resConv4 = nn.Conv2d(16*k, 8*k, kernel_size=1, 
+        self.toHeight3 = nn.Conv2d(16*k, 1, kernel_size=1,
         stride=1, padding=0)
+
+        # In 16*kx32x32, out 8*kx64x64 
         self.convBlock4 = nn.Sequential(
             nn.BatchNorm2d(16*k),
             nn.LeakyReLU(0.2, inplace=True),
@@ -135,9 +156,10 @@ class generator(nn.Module):
             nn.Conv2d(8*k, 8*k, kernel_size=3, stride=1, 
             padding=1)
         )
-        # In 8*kx64x64, out 4*kx128x128
-        self.resConv5 = nn.Conv2d(8*k, 4*k, kernel_size=1, 
+        self.toHeight4 = nn.Conv2d(8*k, 1, kernel_size=1,
         stride=1, padding=0)
+
+        # In 8*kx64x64, out 4*kx128x128
         self.convBlock5 = nn.Sequential(
             nn.BatchNorm2d(8*k),
             nn.LeakyReLU(0.2, inplace=True),
@@ -150,9 +172,10 @@ class generator(nn.Module):
             nn.Conv2d(4*k, 4*k, kernel_size=3, stride=1, 
             padding=1)
         )
-        # In 4*kx128x128, out 2*kx256x256
-        self.resConv6 = nn.Conv2d(4*k, 2*k, kernel_size=1, 
+        self.toHeight5 = nn.Conv2d(4*k, 1, kernel_size=1,
         stride=1, padding=0)
+
+        # In 4*kx128x128, out 2*kx256x256
         self.convBlock6 = nn.Sequential(
             nn.BatchNorm2d(4*k),
             nn.LeakyReLU(0.2, inplace=True),
@@ -165,9 +188,10 @@ class generator(nn.Module):
             nn.Conv2d(2*k, 2*k, kernel_size=3, stride=1, 
             padding=1)
         )
-        # In 2*kx256x256, out 1*kx512x512
-        self.resConv7 = nn.Conv2d(2*k, 1*k, kernel_size=1, 
+        self.toHeight6 = nn.Conv2d(2*k, 1, kernel_size=1,
         stride=1, padding=0)
+
+        # In 2*kx256x256, out 1*kx512x512
         self.convBlock7 = nn.Sequential(
             nn.BatchNorm2d(2*k),
             nn.LeakyReLU(0.2, inplace=True),
@@ -180,100 +204,190 @@ class generator(nn.Module):
             nn.Conv2d(1*k, 1*k, kernel_size=3, stride=1, 
             padding=1)
         )
+        self.toHeight7 = nn.Conv2d(1*k, 1, kernel_size=1,
+        stride=1, padding=0)
         
-        # In 1x512x512, out 1x512x512
-        self.convBlock8 = nn.Sequential(
-            nn.BatchNorm2d(1*k),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(1*k, 1, kernel_size=3, stride=1, 
-            padding=1)
-        )
-
         self.activation = nn.Tanh()
 
     def forward(self, x):
         x = self.fc1(x)
         x = self.fc2(x)
         x = self.fc3(x)
+        x = self.fc4(x)
+        x = self.fc5(x)
         x = x.reshape(x.shape[0], 32*self.k, 4, 4)
 
-        res = self.convBlock1(x)
-        x = res + self.resConv1(self.upscale(x))
+        x = self.convBlock1(x)
+        heightmap = self.toHeight1(x)
 
-        res = self.convBlock2(x + \
-        torch.randn(x.shape,device=self.device))
-        x = res + self.resConv2(self.upscale(x))
+        x = self.convBlock2(x)# + \
+        #torch.randn(x.shape,device=self.device))
+        heightmap = self.upscale(heightmap) + self.toHeight2(x)
 
-        res = self.convBlock3(x + \
-        torch.randn(x.shape,device=self.device))
-        x = res + self.resConv3(self.upscale(x))
+        x = self.convBlock3(x)# + \
+        #torch.randn(x.shape,device=self.device))
+        heightmap = self.upscale(heightmap) + self.toHeight3(x)
 
-        res = self.convBlock4(x + \
-        torch.randn(x.shape,device=self.device))
-        x = res + self.resConv4(self.upscale(x))
+        x = self.convBlock4(x)# + \
+        #torch.randn(x.shape,device=self.device))
+        heightmap = self.upscale(heightmap) + self.toHeight4(x)
 
-        res = self.convBlock5(x + \
-        torch.randn(x.shape,device=self.device))
-        x = res + self.resConv5(self.upscale(x))
+        x = self.convBlock5(x)# + \
+        #torch.randn(x.shape,device=self.device))
+        heightmap = self.upscale(heightmap) + self.toHeight5(x)
         
-        res = self.convBlock6(x + \
-        torch.randn(x.shape,device=self.device))
-        x = res + self.resConv6(self.upscale(x))
+        x = self.convBlock6(x)# + \
+        #torch.randn(x.shape,device=self.device))
+        heightmap = self.upscale(heightmap) + self.toHeight6(x)
 
-        res = self.convBlock7(x + \
-        torch.randn(x.shape,device=self.device))
-        x = res + self.resConv7(self.upscale(x))
+        x = self.convBlock7(x)# + \
+        #torch.randn(x.shape,device=self.device))
+        heightmap = self.upscale(heightmap) + self.toHeight7(x)
 
-        x = self.convBlock8(x)
-        x = self.activation(x)
+        #heightmap = self.activation(heightmap)
+    
+        return heightmap
 
-        return x
+class Blur(nn.Module):
+    def __init__(self):
+        super().__init__()
+        f = torch.Tensor([1, 2, 1])
+        self.register_buffer('f', f)
+    def forward(self, x):
+        f = self.f
+        f = f[None, None, :] * f [None, :, None]
+        return filter2D(x, f, normalized=True)
 
 class discriminator(nn.Module):
-    def __init__ (self, device):
+    def __init__ (self, device, k=32):
         super(discriminator, self).__init__()
         self.device = device
-        modules = []
+        self.downscale = nn.Upsample(scale_factor=0.5,
+        mode="bilinear",align_corners=False)
+
         # input, 512x512 single channel heightmap
-        modules.append(nn.Sequential(
-            nn.Conv2d(1, 128, kernel_size=5, stride=2, 
+        # Output, kx512x512
+        self.fromHeight = nn.Conv2d(1, k, kernel_size=1, 
+        stride=1,padding=0)
+
+        # in kx512x512 out kx256x256
+        self.convBlock1 = nn.Sequential(
+            nn.Conv2d(k, k, kernel_size=3, stride=1, 
+            padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(k, k, kernel_size=3, stride=1, 
+            padding=1),
+            Blur(),
+            nn.Conv2d(k, k, kernel_size=3, stride=2, 
+            padding=1),
+        )
+
+        # in kx256x256 out kx128x128
+        self.convBlock2 = nn.Sequential(
+            nn.Conv2d(k, k, kernel_size=3, stride=1, 
+            padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(k, k, kernel_size=3, stride=1, 
+            padding=1),
+            Blur(),
+            nn.Conv2d(k, k, kernel_size=3, stride=2, 
+            padding=1),
+        )
+
+        # in kx128x128 out kx64x64
+        self.convBlock3 = nn.Sequential(
+            nn.Conv2d(k,k, kernel_size=3, stride=1, 
+            padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(k,k, kernel_size=3, stride=1, 
+            padding=1),
+            Blur(),
+            nn.Conv2d(k,k, kernel_size=3, stride=2, 
+            padding=1),
+        )
+
+        # in kx64x64 out kx32x32
+        self.convBlock4 = nn.Sequential(
+            nn.Conv2d(k, k, kernel_size=3, stride=1, 
+            padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(k, k, kernel_size=3, stride=1, 
+            padding=1),
+            Blur(),
+            nn.Conv2d(k, k, kernel_size=3, stride=2, 
+            padding=1),
+        )
+
+        # in kx32x32 out kx16x16
+        self.convBlock5 = nn.Sequential(
+            nn.Conv2d(k, k, kernel_size=3, stride=1, 
+            padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(k, k, kernel_size=3, stride=1, 
+            padding=1),
+            Blur(),
+            nn.Conv2d(k, k, kernel_size=3, stride=2, 
+            padding=1),
+        )
+
+        # in kx16x16 out kx8x8
+        self.convBlock6 = nn.Sequential(
+            nn.Conv2d(k, k, kernel_size=3, stride=1, 
+            padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(k, k, kernel_size=3, stride=1, 
+            padding=1),
+            Blur(),
+            nn.Conv2d(k, k, kernel_size=3, stride=2, 
+            padding=1),
+        )
+
+        # in kx8x8 out kx4x4
+        self.convBlock7 = nn.Sequential(
+            nn.Conv2d(k, k, kernel_size=3, stride=1, 
+            padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(k, k, kernel_size=3, stride=1, 
+            padding=1),
+            Blur(),
+            nn.Conv2d(k, k, kernel_size=3, stride=2, 
+            padding=1),
+        )
+
+        # in kx4x4 out 1x2x2
+        self.convBlock8 = nn.Sequential(
+            nn.Conv2d(k, 1, kernel_size=3, stride=1, 
             padding=0),
-            nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2)
-        ))
-        #output: 254x254 with 128 channels
-        modules.append(nn.Sequential(
-            nn.Conv2d(128, 64, kernel_size=5, stride=2, 
-            padding=0),
-            nn.BatchNorm2d(64),
-            nn.LeakyReLU(0.2)
-        ))
-        #output: 125x125 with 64 channels
-        modules.append(nn.Sequential(
-            nn.Conv2d(64, 32, kernel_size=5, stride=2, 
-            padding=0),
-            nn.BatchNorm2d(32),
-            nn.LeakyReLU(0.2)
-        ))
-        #output: 60x60 with 32 channels
-        modules.append(nn.Sequential(
-            nn.Conv2d(32, 16, kernel_size=5, stride=2, 
-            padding=0),
-            nn.BatchNorm2d(16),
-            nn.LeakyReLU(0.2)
-        ))
-        # output: 28x28 with 16 channels
-        modules.append(nn.Sequential(
-            nn.Conv2d(16, 1, kernel_size=5, stride=2, 
-            padding=0),
-            nn.BatchNorm2d(1),
-            nn.Tanh()
-        ))
-        # output: 12x12 with 1 channel
-        self.model = nn.Sequential(*modules)
+        )
 
     def forward(self, x):
-        return self.model(x).mean()
+        x = self.fromHeight(x)
+
+        res = self.convBlock1(x)
+        x = self.downscale(x) + res
+
+        res = self.convBlock2(x)
+        x = self.downscale(x) + res
+
+        res = self.convBlock3(x)
+        x = self.downscale(x) + res
+
+        res = self.convBlock4(x)
+        x = self.downscale(x) + res
+
+        res = self.convBlock5(x)
+        x = self.downscale(x) + res
+
+        res = self.convBlock6(x)
+        x = self.downscale(x) + res
+
+        res = self.convBlock7(x)
+        x = self.downscale(x) + res
+
+        x = self.convBlock8(x)
+
+        return x.mean()
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, dataset_location):
