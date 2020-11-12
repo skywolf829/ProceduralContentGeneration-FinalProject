@@ -26,6 +26,7 @@ for foldername in os.listdir("./RawData"):
 
 '''
 
+'''
 for filename in os.listdir("./NumpyRawData"):
     a = np.load(os.path.join("./NumpyRawData", filename))
     for x in range(0, a.shape[0], 512):
@@ -46,5 +47,18 @@ for filename in os.listdir("./NumpyRawData"):
             + "_" + str(x) + "_" + str(y)+".npy"), \
             a[x_start:x_end, y_start:y_end])
 
+
+'''
+import imageio
+for filename in os.listdir("./NumpyRawDataCropped"):
+    print(filename)
+    a = np.load(os.path.join("./NumpyRawDataCropped", filename))
+    a -= a.min()
+    a /= a.max()
+    a *= 255
+    a = a.astype(np.uint8)
+    n = filename.split(".npy")[0] + filename.split(".npy")[1]
+    n = os.path.join("./HeightMapImages", n +".png")
+    imageio.imwrite(n, a)
 
         

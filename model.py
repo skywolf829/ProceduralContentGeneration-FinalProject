@@ -355,12 +355,15 @@ class discriminator(nn.Module):
             padding=1),
         )
 
-        # in kx4x4 out 1x2x2
+        # in kx4x4 out kx1x1
         self.convBlock8 = nn.Sequential(
-            nn.Conv2d(k, 1, kernel_size=3, stride=1, 
+            nn.Conv2d(k, 1, kernel_size=4, stride=1, 
             padding=0),
             nn.LeakyReLU(0.2)
         )
+
+        self.fc = nn.Linear(k, 1)
+        self.activation = nn.Tanh()
 
     def forward(self, x):
         x = self.fromHeight(x)
@@ -388,39 +391,16 @@ class discriminator(nn.Module):
 
         x = self.convBlock8(x)
 
-        return x.mean()
+        x = torch.squeeze(x)
+        x = self.fc(x)
+        x = self.activation(x)
+
+        return x
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, dataset_location):
         self.dataset_location = dataset_location
-        self.items = os.listdir(dataset_location)
-        self.items.remove("stats.txt")
-        stats = np.array(pd.read_csv( \
-        os.path.join(dataset_location, "stats.txt"), 
-        sep="\s+", header=None))
-
-        self.min = stats[0, 0]
-        self.max = stats[0, 1]
-        '''
-        self.min = None
-        self.max = None
-        
-        print("Loading dataset...")
-        for filename in self.items:
-            d = np.load(os.path.join(self.dataset_location, 
-            filename))
-            if(self.min is None):
-                self.min = d.min()
-            elif(self.min > d.min()):
-                self.min = d.min()
-            if(self.max is None):
-                self.max = d.max()
-            elif(self.max < d.max()):
-                self.max = d.max()
-        print("Datset loaded. Min val: %0.02f, \
-        max val: %0.02f" % (self.min, self.max))
-        '''
-        
+        self.items = os.listdir(dataset_location)        
 
     def __len__(self):
         return len(self.items)
@@ -429,12 +409,6 @@ class Dataset(torch.utils.data.Dataset):
         data = np.load(os.path.join(self.dataset_location, 
         self.items[index]))
         data = np2torch(data, "cpu")
-        '''
-        data -= self.min
-        data *= 2 / (self.max - self.min)
-        data -= 1
-        '''
-        data -= data.min() - 1
-        data *= (2/(data.max()+2))
+        data *= (2.0/255.0)
         data -= 1
         return data.unsqueeze(0)
