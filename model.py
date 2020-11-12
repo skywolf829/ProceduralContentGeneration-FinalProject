@@ -18,18 +18,18 @@ def save_models(g, d, location):
     torch.save(discrim_state, os.path.join(path_to_save, "model.discriminator"))
 
 def load_models(folder, device):
-    generator = generator(device)
-    discriminator = discriminator(device)
+    g = generator(device)
+    d = discriminator(device)
 
     gen_params = torch.load(os.path.join(folder, "model.generator"),
     map_location=device)
     discrim_params = torch.load(os.path.join(folder, "model.discriminator"),
     map_location=device)
     
-    generator.load_state_dict(gen_params)
-    discriminator.load_state_dict(discrim_params)
+    g.load_state_dict(gen_params)
+    d.load_state_dict(discrim_params)
 
-    return generator, discriminator
+    return g, d
 
 def calc_gradient_penalty(discrim, real_data, fake_data, device):
     #print real_data.size()
