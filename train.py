@@ -31,6 +31,8 @@ if __name__ == '__main__':
     if(args['load_from'] is not None):
         g, d = load_models(os.path.join("SavedModels", 
         args['load_from']), args['device'])
+        g = g.to(args['device'])
+        d = d.to(args['device'])
     else:
         g = generator(args['device']).to(args['device'])
         g.apply(weights_init)
