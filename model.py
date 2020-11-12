@@ -245,7 +245,7 @@ class generator(nn.Module):
         torch.randn(x.shape,device=self.device))
         heightmap = self.upscale(heightmap) + self.toHeight7(x)
 
-        #heightmap = self.activation(heightmap)
+        heightmap = self.activation(heightmap)
     
         return heightmap
 
