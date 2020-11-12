@@ -18,8 +18,8 @@ def save_models(g, d, location):
     torch.save(discrim_state, os.path.join(path_to_save, "model.discriminators"))
 
 def load_models(folder, device):
-    generators = generator()
-    discriminators = discriminator()
+    generators = generator(device)
+    discriminators = discriminator(device)
 
     gen_params = torch.load(os.path.join(folder, "model.generator"),
     map_location=device)
