@@ -392,7 +392,7 @@ class discriminator(nn.Module):
         
         x = self.activation(x)
 
-        return x
+        return x.squeeze()
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, dataset_location):
