@@ -413,4 +413,5 @@ class Dataset(torch.utils.data.Dataset):
         data = np2torch(data, "cpu")
         data *= (2.0/255.0)
         data -= 1
+        print(data.shape)
         return data.unsqueeze(0)
