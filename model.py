@@ -90,6 +90,7 @@ class generator(nn.Module):
         align_corners=False)
 
         # Input is 16, output is 256
+        self.leakyrelu = nn.LeakyReLU(0.2, inplace=True)
         self.fc1 = nn.Linear(16, 512)
         self.fc2 = nn.Linear(512, 512)
         self.fc3 = nn.Linear(512, 512)
@@ -211,6 +212,7 @@ class generator(nn.Module):
         self.activation = nn.Tanh()
 
     def forward(self, x):
+
         x = self.fc1(x)
         x = self.fc2(x)
         x = self.fc3(x)
@@ -218,36 +220,34 @@ class generator(nn.Module):
         x = self.fc5(x)
         x = x.reshape(x.shape[0], 32*self.k, 4, 4)
 
-        x = self.convBlock1(x + \
+        x = self.convBlock1(x) + \
         torch.randn(x.shape,device=self.device))
-        heightmap = self.toHeight1(x)
 
+        heightmap = self.activation(self.toHeight1(x))
         x = self.convBlock2(x + \
         torch.randn(x.shape,device=self.device))
-        heightmap = self.upscale(heightmap) + self.toHeight2(x)
+        heightmap =  self.activation(self.upscale(heightmap) + self.toHeight2(x))
 
         x = self.convBlock3(x + \
         torch.randn(x.shape,device=self.device))
-        heightmap = self.upscale(heightmap) + self.toHeight3(x)
+        heightmap =  self.activation(self.upscale(heightmap) + self.toHeight3(x))
 
         x = self.convBlock4(x + \
         torch.randn(x.shape,device=self.device))
-        heightmap = self.upscale(heightmap) + self.toHeight4(x)
+        heightmap =  self.activation(self.upscale(heightmap) + self.toHeight4(x))
 
         x = self.convBlock5(x + \
         torch.randn(x.shape,device=self.device))
-        heightmap = self.upscale(heightmap) + self.toHeight5(x)
-        
+        heightmap =  self.activation(self.upscale(heightmap) + self.toHeight5(x))
+
         x = self.convBlock6(x + \
         torch.randn(x.shape,device=self.device))
-        heightmap = self.upscale(heightmap) + self.toHeight6(x)
+        heightmap =  self.activation(self.upscale(heightmap) + self.toHeight6(x))
 
         x = self.convBlock7(x + \
         torch.randn(x.shape,device=self.device))
-        heightmap = self.upscale(heightmap) + self.toHeight7(x)
+        heightmap =  self.activation(self.upscale(heightmap) + self.toHeight7(x))
 
-        heightmap = self.activation(heightmap)
-    
         return heightmap
 
 class Blur(nn.Module):
@@ -359,8 +359,7 @@ class discriminator(nn.Module):
         # in kx4x4 out kx1x1
         self.convBlock8 = nn.Sequential(
             nn.Conv2d(k, 1, kernel_size=4, stride=1, 
-            padding=0),
-            nn.LeakyReLU(0.2)
+            padding=0)
         )
         self.activation = nn.Tanh()
 
@@ -392,7 +391,7 @@ class discriminator(nn.Module):
         
         x = self.activation(x)
 
-        return x.squeeze()[0]
+        return x.mean()
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, dataset_location):
@@ -404,7 +403,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         data = imageio.imread(os.path.join(self.dataset_location, 
-        self.items[index]))
+        self.items[index])).astype(np.float32)
         data = np2torch(data, "cpu")
         data *= (2.0/255.0)
         data -= 1
