@@ -362,8 +362,6 @@ class discriminator(nn.Module):
             padding=0),
             nn.LeakyReLU(0.2)
         )
-
-        self.fc = nn.Linear(k, 1)
         self.activation = nn.Tanh()
 
     def forward(self, x):
@@ -391,10 +389,7 @@ class discriminator(nn.Module):
         x = self.downscale(x) + res
 
         x = self.convBlock8(x)
-        print(x.shape)
-        x = torch.squeeze(x)
-        print(x.shape)
-        x = self.fc(x)
+        
         x = self.activation(x)
 
         return x
@@ -413,5 +408,4 @@ class Dataset(torch.utils.data.Dataset):
         data = np2torch(data, "cpu")
         data *= (2.0/255.0)
         data -= 1
-        print(data.shape)
         return data.unsqueeze(0)
