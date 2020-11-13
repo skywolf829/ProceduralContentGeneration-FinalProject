@@ -406,7 +406,7 @@ class Dataset(torch.utils.data.Dataset):
         return len(self.items)
 
     def __getitem__(self, index):
-        data = np.load(os.path.join(self.dataset_location, 
+        data = imageio.imread(os.path.join(self.dataset_location, 
         self.items[index]))
         data = np2torch(data, "cpu")
         data *= (2.0/255.0)
