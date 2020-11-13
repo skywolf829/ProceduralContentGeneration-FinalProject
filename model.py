@@ -220,7 +220,7 @@ class generator(nn.Module):
         x = self.fc5(x)
         x = x.reshape(x.shape[0], 32*self.k, 4, 4)
 
-        x = self.convBlock1(x) + \
+        x = self.convBlock1(x + \
         torch.randn(x.shape,device=self.device))
 
         heightmap = self.activation(self.toHeight1(x))
