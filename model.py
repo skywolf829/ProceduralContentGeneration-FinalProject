@@ -390,8 +390,9 @@ class discriminator(nn.Module):
         x = self.downscale(x) + res
 
         x = self.convBlock8(x)
-
+        print(x.shape)
         x = torch.squeeze(x)
+        print(x.shape)
         x = self.fc(x)
         x = self.activation(x)
 
