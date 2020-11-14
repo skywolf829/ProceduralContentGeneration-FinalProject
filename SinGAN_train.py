@@ -92,7 +92,8 @@ if __name__ == '__main__':
 
                     # Train to trick the discriminator
                     if(s > 0):
-                        fake_heightmaps = generate(gs[0:s], args['device'])
+                        fake_heightmaps = generate(gs[0:s], 
+                        real_heightmaps.shape[0], args['device'])
                     else:
                         fake_heightmaps = torch.zeros(real_heightmaps.shape, 
                         device=args['device'])
