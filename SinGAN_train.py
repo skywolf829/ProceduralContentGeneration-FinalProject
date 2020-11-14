@@ -53,8 +53,8 @@ if __name__ == '__main__':
             print("Starting epoch %i" % (epoch))
             for i, (real_heightmaps) in enumerate(dataloader):
                 real_heightmaps = real_heightmaps.to(args['device'])
-                real_heightmaps = laplace_pyramid_downscale2D(real_heightmaps, n-s-1,
-                0.75, args['device'])
+                real_heightmaps = laplace_pyramid_downscale2D(real_heightmaps, 
+                n-s-1, 0.75, args['device'])
                 if(s > 0):
                     fake_heightmaps = generate(gs[0:s], 
                     real_heightmaps.shape[0], args['device'])
