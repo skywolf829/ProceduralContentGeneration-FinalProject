@@ -136,10 +136,7 @@ def generate(generators, batch_size, device):
             size=generators[i].resolution, mode="bilinear", 
             align_corners=False)
             
-            noise = torch.randn(generators[i].resolution, 
-            device=device)
-            generated_image = generators[i](generated_image, 
-            noise)           
+            generated_image = generators[i](generated_image)   
 
     return generated_image
 
@@ -179,7 +176,7 @@ class SinGAN_Generator(nn.Module):
             if i == 0:
                 modules.append(nn.Sequential(
                     nn.Conv2d(1, num_kernels, kernel_size=3, 
-                    stride=1, padding=1),
+                    stride=1, padding=0),
                     nn.BatchNorm2d(num_kernels),
                     nn.LeakyReLU(0.2, inplace=True)
                 ))
@@ -187,7 +184,7 @@ class SinGAN_Generator(nn.Module):
             elif i == 4:  
                 tail = nn.Sequential(
                     nn.Conv2d(num_kernels, 1, kernel_size=3, 
-                    stride=1, padding=1),
+                    stride=1, padding=0),
                     nn.Tanh()
                 )              
                 modules.append(tail)
@@ -195,19 +192,18 @@ class SinGAN_Generator(nn.Module):
             else:
                 modules.append(nn.Sequential(
                     nn.Conv2d(num_kernels, num_kernels, kernel_size=3,
-                    stride=1, padding=1),
+                    stride=1, padding=0),
                     nn.BatchNorm2d(num_kernels),
                     nn.LeakyReLU(0.2, inplace=True)
                 ))
         self.model = nn.Sequential(*modules)
         
-
     def forward(self, data, noise=None):
-        if(noise is None):
-            noise = torch.zeros(data.shape).to(self.device)
-        if(data is None):
-            data = torch.zeros(data.shape).to(self.device)
-        noisePlusData = data + noise
+        
+        data_padded = F.pad(data, [5, 5, 5, 5])
+        noise = torch.randn(data_padded.shape, device=self.device)
+        
+        noisePlusData = data_padded + noise
         
         output = self.model(noisePlusData)
         return output + data

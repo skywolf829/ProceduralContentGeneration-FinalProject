@@ -65,10 +65,7 @@ if __name__ == '__main__':
                     fake_heightmaps = torch.zeros(real_heightmaps.shape, 
                     device=args['device'])
 
-                rand_input = torch.randn([real_heightmaps.shape[0], 1,
-                g.resolution[0], g.resolution[1]], 
-                device=args['device'])
-                fake_heightmaps = g(fake_heightmaps, rand_input)
+                fake_heightmaps = g(fake_heightmaps)
 
                 # Update discriminator: maximize D(x) + D(G(z))            
                 for j in range(3):            
@@ -105,10 +102,7 @@ if __name__ == '__main__':
                         fake_heightmaps = torch.zeros(real_heightmaps.shape, 
                         device=args['device'])
 
-                    rand_input = torch.randn([real_heightmaps.shape[0], 1,
-                    g.resolution[0], g.resolution[1]], 
-                    device=args['device'])
-                    fake_heightmaps = g(fake_heightmaps, rand_input)
+                    fake_heightmaps = g(fake_heightmaps)
                     output = d(fake_heightmaps)
                     generator_error = -output.mean()
                     generator_error.backward(retain_graph=True)
