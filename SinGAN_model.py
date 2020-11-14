@@ -157,7 +157,7 @@ def init_scales(dataset, device, min_dim_size = 25, downscale_ratio = 0.75):
             x = int(dataset.resolution[j] * factor)
             scaling.append(x)
         print("Scale %i: %s" % (i, str(scaling)))
-        num_kernels = int(2 ** (5 + (i / 8)))
+        num_kernels = int((2 ** (5 + (i / 8))) / 3)
         g = SinGAN_Generator(num_kernels, scaling, device).to(device)
         g.apply(weights_init)
         d = SinGAN_Discriminator(num_kernels, device).to(device)
