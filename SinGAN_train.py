@@ -137,12 +137,13 @@ if __name__ == '__main__':
                     writer.add_image('real', 
                         (real_heightmaps[0] - real_heightmaps[0].min()) \
                         / (real_heightmaps[0].max() - real_heightmaps[0].min()), 
-                        iteration)
-                        
+                        iteration)       
 
                 iteration += 1
 
             if(epoch % args['save_every'] == 0):
                 save_models(gs, ds, args['save_name'])
         
-        d[s] = d[s].to("cpu")
+        ds[s] = ds[s].to("cpu")
+        gs[s] = gs[s].eval()
+        ds[s] = ds[s].eval()
