@@ -126,9 +126,10 @@ def weights_init(m):
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
 
-def generate(generators, device):
+def generate(generators, batch_size, device):
     with torch.no_grad():
-        generated_image = torch.zeros(generators[0].resolution).to(device)
+        generated_image = torch.zeros(batch_size, 1,
+        generators[0].resolution[0], generators[0].resolution[1]).to(device)
         
         for i in range(0, len(generators)):
             generated_image = F.interpolate(generated_image, 
