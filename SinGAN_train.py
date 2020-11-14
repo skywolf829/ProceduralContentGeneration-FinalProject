@@ -144,3 +144,5 @@ if __name__ == '__main__':
 
             if(epoch % args['save_every'] == 0):
                 save_models(gs, ds, args['save_name'])
+        
+        d[s] = d[s].to("cpu")
