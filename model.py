@@ -357,10 +357,13 @@ class discriminator(nn.Module):
         )
 
         # in kx4x4 out kx1x1
-        self.convBlock8 = nn.Sequential(
-            nn.Conv2d(k, 1, kernel_size=4, stride=1, 
-            padding=0)
-        )
+        #self.convBlock8 = nn.Sequential(
+        #    nn.Conv2d(k, 1, kernel_size=4, stride=1, 
+        #    padding=0)
+        #)
+
+        self.avgpool = nn.AvgPool2d(kernel_size=3,stride=1,padding=1)
+        self.fc = nn.Linear(4*4*k, 1)
         self.activation = nn.Tanh()
 
     def forward(self, x):
@@ -387,11 +390,13 @@ class discriminator(nn.Module):
         res = self.convBlock7(x)
         x = self.downscale(x) + res
 
-        x = self.convBlock8(x)
+        #x = self.convBlock8(x)
         
+        x = self.avgpool(x)
+        x = torch.flatten(x, start_dim=1)
+        x = self.fc(x)
         x = self.activation(x)
-
-        return x.mean()
+        return x
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, dataset_location):
