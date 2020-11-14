@@ -98,6 +98,9 @@ if __name__ == '__main__':
                     if(s > 0):
                         fake_heightmaps = generate(gs[0:s], 
                         real_heightmaps.shape[0], args['device'])
+                        fake_heightmaps= F.interpolate(fake_heightmaps, 
+                        size=g.resolution, mode="bilinear", 
+                        align_corners=False)
                     else:
                         fake_heightmaps = torch.zeros(real_heightmaps.shape, 
                         device=args['device'])
