@@ -16,6 +16,7 @@ if __name__ == '__main__':
     parser.add_argument('--training_folder',type=str,default="HeightMapImages",help="Folder that has training data")
     parser.add_argument('--device',type=str,default="cuda:0",help="What device to use for training")
     parser.add_argument('--load_from',type=str,default=None,help="If resuming training, where to load from")
+    parser.add_argument('--start_scale',type=int,default=0,help="Scale to start training at")
     parser.add_argument('--log_every',type=int,default=1,help="How often to log using tensorboard")
     parser.add_argument('--save_every',type=int,default=1,help="How often (# epochs) to save the model")
     parser.add_argument('--save_name',type=str,default="Temp",help="Name to save the model as")
@@ -36,7 +37,7 @@ if __name__ == '__main__':
     else:
         n, gs, ds = init_scales(dataset, args['device'])
 
-    for s in range(n):
+    for s in range(args['start_scale'],n):
         print("Starting scale %i with resolution %s" % (s, str(gs[s].resolution)))
         g = gs[s]
         d = ds[s]

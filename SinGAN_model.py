@@ -26,27 +26,20 @@ def save_models(gs, ds, location):
         discrim_states[str(i)] = ds[i].state_dict()
     torch.save(discrim_states, os.path.join(path_to_save, "SinGAN.discriminators"))
 
-def load_models(folder, device):
-    gs = []
-    ds = []
+def load_models(gs, ds, folder, device):
+    
     gen_params = torch.load(os.path.join(load_folder, "SinGAN.generators"),
     map_location=device)
-    
-    for i in range(max(list(gen_params.keys()))):
-        if(str(i) in gen_params.keys()):
-            gen_params_compat = OrderedDict()
-            generator, num_kernels = init_gen(i).to(device)
-            generator.load_state_dict(gen_params_compat)
-            gs.append(generator)
-
     discrim_params = torch.load(os.path.join(load_folder, "SinGAN.discriminators"),
     map_location=device)
-    for i in range(max(list(gen_params.keys()))):
+    for i in range(len(gs)):
+        if(str(i) in gen_params.keys()):
+            gen_params_compat = OrderedDict()
+            gs[i].load_state_dict(gen_params_compat)
+
         if(str(i) in discrim_params.keys()):
             discrim_params_compat = OrderedDict()
-            discriminator = init_discrim(i).to(device)
-            discriminator.load_state_dict(discrim_params_compat)
-            ds.append(discriminator)
+            ds[i].load_state_dict(discrim_params_compat)
     return gs, ds
 
 def laplace_pyramid_downscale2D(frame, level, downscale_per_level, device):
