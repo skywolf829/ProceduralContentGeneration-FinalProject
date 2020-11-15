@@ -17,6 +17,7 @@ if __name__ == '__main__':
     parser.add_argument('--device',type=str,default="cuda:0",help="What device to use for training")
     parser.add_argument('--load_from',type=str,default=None,help="If resuming training, where to load from")
     parser.add_argument('--start_scale',type=int,default=0,help="Scale to start training at")
+    parser.add_argument('--start_epoch',type=int,default=0,help="Epoch to start training at")
     parser.add_argument('--log_every',type=int,default=1,help="How often to log using tensorboard")
     parser.add_argument('--save_every',type=int,default=1,help="How often (# epochs) to save the model")
     parser.add_argument('--save_name',type=str,default="Temp",help="Name to save the model as")
@@ -50,7 +51,7 @@ if __name__ == '__main__':
         args['save_name']+"_scale"+str(s)))
 
         iteration = 0
-        for epoch in range(args['epochs']):
+        for epoch in range(args['start_epoch'], args['epochs']):
             print("Starting epoch %i" % (epoch))
             for i, (real_heightmaps) in enumerate(dataloader):
                 real_heightmaps = real_heightmaps.to(args['device'])
