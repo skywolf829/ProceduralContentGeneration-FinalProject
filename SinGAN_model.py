@@ -28,9 +28,9 @@ def save_models(gs, ds, location):
 
 def load_models(gs, ds, folder, device):
     
-    gen_params = torch.load(os.path.join(load_folder, "SinGAN.generators"),
+    gen_params = torch.load(os.path.join(folder, "SinGAN.generators"),
     map_location=device)
-    discrim_params = torch.load(os.path.join(load_folder, "SinGAN.discriminators"),
+    discrim_params = torch.load(os.path.join(folder, "SinGAN.discriminators"),
     map_location=device)
     for i in range(len(gs)):
         if(str(i) in gen_params.keys()):
