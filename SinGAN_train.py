@@ -33,7 +33,7 @@ if __name__ == '__main__':
     if(args['load_from'] is not None):
         n, gs, ds = init_scales(dataset, args['device'])
         gs, ds = load_models(gs, ds, os.path.join("SavedModels", 
-        args['load_from']), args['device']))
+        args['load_from']), args['device'])
     else:
         n, gs, ds = init_scales(dataset, args['device'])
 
