@@ -31,7 +31,8 @@ if __name__ == '__main__':
                     num_workers=args['num_workers']
                 )
     if(args['load_from'] is not None):
-        gs, ds = load_models(os.path.join("SavedModels", 
+        n, gs, ds = init_scales(dataset, args['device'])
+        gs, ds = load_models(gs, ds, os.path.join("SavedModels", 
         args['load_from']), args['device']))
     else:
         n, gs, ds = init_scales(dataset, args['device'])
