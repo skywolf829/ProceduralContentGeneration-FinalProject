@@ -31,17 +31,15 @@ if __name__ == '__main__':
                     num_workers=args['num_workers']
                 )
     if(args['load_from'] is not None):
-        g, d = load_models(os.path.join("SavedModels", 
-        args['load_from']), args['device'])
-        g = g.to(args['device'])
-        d = d.to(args['device'])
+        gs, ds = load_models(os.path.join("SavedModels", 
+        args['load_from']), args['device']))
     else:
         n, gs, ds = init_scales(dataset, args['device'])
 
     for s in range(args['start_scale'],n):
         print("Starting scale %i with resolution %s" % (s, str(gs[s].resolution)))
         g = gs[s]
-        d = ds[s]
+        d = ds[s].to(args['device'])
         generator_optimizer = optim.Adam(g.parameters(), 
         lr=0.0005, betas=(0.5,0.99))
         discriminator_optimizer = optim.Adam(d.parameters(), 

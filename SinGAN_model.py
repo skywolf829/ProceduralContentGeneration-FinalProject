@@ -36,6 +36,7 @@ def load_models(gs, ds, folder, device):
         if(str(i) in gen_params.keys()):
             gen_params_compat = OrderedDict()
             gs[i].load_state_dict(gen_params_compat)
+            gs[i].to(device)
 
         if(str(i) in discrim_params.keys()):
             discrim_params_compat = OrderedDict()
