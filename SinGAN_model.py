@@ -33,15 +33,13 @@ def load_models(gs, ds, folder, device):
     map_location=device)
     discrim_params = torch.load(os.path.join(folder, "SinGAN.discriminators"),
     map_location=device)
-    for i in range(len(gs)):
-        if(str(i) in gen_params.keys()):
-            gen_params_compat = OrderedDict()
-            gs[i].load_state_dict(gen_params_compat)
-            gs[i].to(device)
-
-        if(str(i) in discrim_params.keys()):
-            discrim_params_compat = OrderedDict()
-            ds[i].load_state_dict(discrim_params_compat)
+    for i in range(len(gs)):        
+        gen_params_compat = OrderedDict()
+        gs[i].load_state_dict(gen_params[str(i)])
+        gs[i].to(device)
+        
+        discrim_params_compat = OrderedDict()
+        ds[i].load_state_dict(discrim_params[str(i)])
     return gs, ds
 
 def laplace_pyramid_downscale2D(frame, level, downscale_per_level, device):
