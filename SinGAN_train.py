@@ -118,8 +118,11 @@ if __name__ == '__main__':
                     (iteration, discrim_error_fake.item() + discrim_error_real.item(), 
                     generator_error.item()))
 
-                    writer.add_scalar('D_loss',
-                    discrim_error_real.item() + discrim_error_fake.item(), 
+                    writer.add_scalar('D_loss_real',
+                    discrim_error_real.item(), 
+                    iteration) 
+                    writer.add_scalar('D_loss_fake',
+                    discrim_error_fake.item(), 
                     iteration) 
                     writer.add_scalar('G_loss',
                     generator_error.item(), 
