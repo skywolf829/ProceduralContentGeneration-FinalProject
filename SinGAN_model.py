@@ -9,6 +9,7 @@ from kornia.filters import filter2D
 import imageio
 import math
 from collections import OrderedDict 
+import random
 
 def save_models(gs, ds, location):
     folder = create_folder("SavedModels", location)
@@ -242,8 +243,7 @@ class Dataset(torch.utils.data.Dataset):
     def __init__(self, dataset_location):
         self.dataset_location = dataset_location
         self.items = os.listdir(dataset_location)        
-        self.resolution = imageio.imread(os.path.join(self.dataset_location, 
-        self.items[0])).astype(np.float32).shape
+        self.resolution = [128, 128]
 
     def __len__(self):
         return len(self.items)
@@ -254,4 +254,6 @@ class Dataset(torch.utils.data.Dataset):
         data = np2torch(data, "cpu")
         data *= (2.0/255.0)
         data -= 1
-        return data.unsqueeze(0)
+        x = random.randint(0, data.shape[0]-128)
+        y = random.randint(0, data.shape[1]-128)
+        return data.unsqueeze(0)[:,x:x+128, y:y+128]
