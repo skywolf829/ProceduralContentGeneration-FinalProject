@@ -136,8 +136,8 @@ if __name__ == '__main__':
 
                 iteration += 1
 
-            #if(epoch % args['save_every'] == 0):
-            #    save_models(gs, ds, args['save_name'])
+            if(epoch % args['save_every'] == 0):
+                save_models(gs, ds, args['save_name'])
         
         ds[s] = ds[s].to("cpu")
         gs[s] = gs[s].eval()
