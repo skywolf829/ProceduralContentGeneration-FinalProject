@@ -13,7 +13,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs',type=int,default=1,help="Number of epochs to train")
     parser.add_argument('--batch',type=int,default=1,help="Batch size")
     parser.add_argument('--num_workers',type=int,default=16,help="Number of workers to load data in parallel")
-    parser.add_argument('--training_folder',type=str,default="Subset",help="Folder that has training data")
+    parser.add_argument('--training_folder',type=str,default="HeightMapImages",help="Folder that has training data")
     parser.add_argument('--device',type=str,default="cuda:0",help="What device to use for training")
     parser.add_argument('--load_from',type=str,default=None,help="If resuming training, where to load from")
     parser.add_argument('--start_scale',type=int,default=0,help="Scale to start training at")
