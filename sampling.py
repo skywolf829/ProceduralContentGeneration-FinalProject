@@ -10,8 +10,9 @@ from torchviz import make_dot
 import torch.nn as nn
 import torch.nn.functional as F
 from graphviz import Source
-
 os.environ["PATH"] += os.pathsep + "C:/Users/Sky/miniconda3/Library/bin/graphviz"
+import time
+import zmq
 
 def exists(val):
     return val is not None
@@ -91,108 +92,114 @@ def sobel(imgs, axis, device):
     output = F.conv2d(imgs, weights)
     return output
 
-model_args = dict(
-    name = 'default',
-    results_dir = './results',
-    models_dir = './models',
-    batch_size = 8,
-    gradient_accumulate_every = 6,
-    image_size = 128,
-    network_capacity = 4,
-    fmap_max = 512,
-    transparent = False,
-    lr = 2e-4,
-    lr_mlp = 0.1,
-    ttur_mult = 1.5,
-    rel_disc_loss = False,
-    num_workers = 16,
-    save_every = 1000,
-    evaluate_every = 1000,
-    trunc_psi = 0.75,
-    fp16 = False,
-    cl_reg = False,
-    fq_layers = [],
-    fq_dict_size = 256,
-    attn_layers = [],
-    no_const = False,
-    aug_prob = 0.,
-    aug_types = ['translation', 'cutout'],
-    top_k_training = False,
-    generator_top_k_gamma = 0.99,
-    generator_top_k_frac = 0.5,
-    dataset_aug_prob = 0.,
-    calculate_fid_every = None,
-    mixed_prob = 0.9,
-    log = False
-)
-
-num_image_tiles = 8
-load_from = -1
-results_dir = './results'
-name = 'default'
-
-model = Trainer(**model_args)
-model.load(load_from)
-model.GAN.train(False)
-'''
-for params in model.GAN.parameters():
-    params.requires_grad = False # Freeze all weights
-'''
-
-def smoothness_loss(imgs):
+def smoothness_loss(imgs, mask=None):
+    if(mask is None):
+        mask = torch.ones(imgs.shape, device="cuda:0")
     laps = laplacian(images,"cuda:0")
     laps = torch.abs(laps)
-    return laps.mean()
+    return laps[mask>0.5].mean()
 
-def elevation_loss(imgs):
-    return imgs.mean()
+def elevation_loss(imgs, mask=None):
+    if(mask is None):
+        mask = torch.ones(imgs.shape, device="cuda:0")
+    return imgs[mask>0.5].mean()
 
-def vertical_orientation_loss(imgs):
-    sobel_x = torch.abs(sobel(imgs, 1, "cuda:0")).mean()
-    sobel_y = torch.abs(sobel(imgs, 0, "cuda:0")).mean()
-    return sobel_x / sobel_y
+def vertical_orientation_loss(imgs, mask=None):
+    if(mask is None):
+        mask = torch.ones(imgs.shape, device="cuda:0")
+    sobel_y = torch.abs(sobel(imgs, 0, "cuda:0"))
+    return -sobel_y[mask > 0.5].mean()
 
-def horizontal_orientation_loss(imgs):
-    sobel_x = torch.abs(sobel(imgs, 1, "cuda:0")).mean()
-    sobel_y = torch.abs(sobel(imgs, 0, "cuda:0")).mean()
-    return sobel_y / sobel_x
+def horizontal_orientation_loss(imgs, mask=None):
+    if(mask is None):
+        mask = torch.ones(imgs.shape, device="cuda:0")
+    sobel_x = torch.abs(sobel(imgs, 1, "cuda:0"))
+    return -sobel_x[mask > 0.5].mean()
 
+def load_latest_model():
+    model_args = dict(
+        name = 'default',
+        results_dir = './results',
+        models_dir = './models',
+        batch_size = 8,
+        gradient_accumulate_every = 6,
+        image_size = 128,
+        network_capacity = 4,
+        fmap_max = 512,
+        transparent = False,
+        lr = 2e-4,
+        lr_mlp = 0.1,
+        ttur_mult = 1.5,
+        rel_disc_loss = False,
+        num_workers = 16,
+        save_every = 1000,
+        evaluate_every = 1000,
+        trunc_psi = 0.75,
+        fp16 = False,
+        cl_reg = False,
+        fq_layers = [],
+        fq_dict_size = 256,
+        attn_layers = [],
+        no_const = False,
+        aug_prob = 0.,
+        aug_types = ['translation', 'cutout'],
+        top_k_training = False,
+        generator_top_k_gamma = 0.99,
+        generator_top_k_frac = 0.5,
+        dataset_aug_prob = 0.,
+        calculate_fid_every = None,
+        mixed_prob = 0.9,
+        log = False
+    )
+    model = Trainer(**model_args)
+    model.load(-1)
+    model.GAN.train(False)
+    return model
 
-noise   = torch.randn(9, 512).cuda()
-noise.requires_grad = True
+def optimize_on(model, noise, losses, masks, iterations, save_every = 1):
 
-img_noises = image_noise(1, 128, device = 0)
+    img_noises = image_noise(1, 128, device = 0)
+    optimizer = optim.Adam([noise], lr=0.01)
+    imgs_over_time = []
 
-optimizer = optim.Adam([noise], lr=0.01)
-
-imgs_over_time = []
-
-iterations = 100
-save_every = 1
-for i in range(iterations):
-    optimizer.zero_grad()
-    # Having the default 0.75 trunc_psi causes gradients to be lost, so we must use None
-    styles  = noise_to_styles(model, noise, trunc_psi = None)  # pass through mapping network
-    images  = styles_to_images(model, styles, img_noises) # call the generator on intermediate style vectors
-    images = images[:,0:1,:,:]
+    for i in range(iterations):
+        optimizer.zero_grad()
+        # Having the default 0.75 trunc_psi causes gradients to be lost, so we must use None
+        styles  = noise_to_styles(model, noise, trunc_psi = None)  # pass through mapping network
+        images  = styles_to_images(model, styles, img_noises) # call the generator on intermediate style vectors
+        images = images[:,0:1,:,:]
+            
+        if(i % save_every == 0):
+            imgs_over_time.append(get_img_from_tensor(images, nrow=8))
         
-    if(i % save_every == 0):
-        imgs_over_time.append(get_img_from_tensor(images, nrow=3))
+        _losses = []
+        for j in range(len(losses)):
+            _losses.append(losses[j](images, masks[j]))
+        
+        j = 0
+        for loss in _losses:            
+            loss.backward(retain_graph=True)
+            print("%i/%i: loss%i=%0.04f" % (i+1, iterations, j, loss.item()))
+            j += 1
+        
+        optimizer.step()
+    return imgs_over_time
+
+if __name__ == '__main__':
+    model = load_latest_model()
+
+    num_image_tiles = 8
+    results_dir = './results'
+    name = 'default'
     
-    losses = [
-        horizontal_orientation_loss(images),
-        -15*smoothness_loss(images)
-    ]
-    
-    k = 0
-    for loss in losses:            
-        loss.backward(retain_graph=True)
-        print("%i/%i: loss%i=%0.04f" % (i+1, iterations, k, loss.item()))
-        k += 1
-    
+    iterations = 100
+    num_images = 64
+    img_resolution = 128
 
-    optimizer.step()
+    noise   = torch.randn(num_images, 512).cuda()
+    noise.requires_grad = True
+    losses = [elevation_loss]
+    masks = [torch.ones([num_images, 1, img_resolution, img_resolution])]
+    imgs_over_time = optimize_on(model, noise, losses, masks, iterations)
 
-
-
-imageio.mimwrite("images_over_time.gif", imgs_over_time)
+    imageio.mimwrite("images_over_time.gif", imgs_over_time)
