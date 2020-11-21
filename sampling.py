@@ -48,6 +48,7 @@ def styles_to_images(model, w, noise):
     return images
 
 def get_img_from_tensor(t, nrow=8):
+    t = torch.clamp(t,0.0,1.0)
     imgs = make_grid(t, nrow=nrow).detach().cpu().numpy().swapaxes(0,1).swapaxes(1,2)
     imgs *= 255 
     imgs = imgs.astype(np.uint8)
@@ -95,26 +96,55 @@ def sobel(imgs, axis, device):
 def smoothness_loss(imgs, mask=None):
     if(mask is None):
         mask = torch.ones(imgs.shape, device="cuda:0")
-    laps = laplacian(images,"cuda:0")
+    laps = laplacian(imgs,"cuda:0")
     laps = torch.abs(laps)
-    return laps[mask>0.5].mean()
+    return (laps*mask).mean()
 
-def elevation_loss(imgs, mask=None):
+def ridgidness_loss(imgs, mask=None):
     if(mask is None):
         mask = torch.ones(imgs.shape, device="cuda:0")
-    return imgs[mask>0.5].mean()
+    laps = laplacian(imgs,"cuda:0")
+    laps = torch.abs(laps)
+    return (-laps*mask).mean()
 
-def vertical_orientation_loss(imgs, mask=None):
+def exact_height_loss(imgs, mask=None):
+    if(mask is None):
+        mask = torch.ones(imgs.shape, device="cuda:0")
+    return ((imgs-mask)**2).mean()
+    
+def lower_heightmap_loss(imgs, mask=None):
+    if(mask is None):
+        mask = torch.ones(imgs.shape, device="cuda:0")
+    return (imgs*mask).mean()
+
+def higher_heightmap_loss(imgs, mask=None):
+    if(mask is None):
+        mask = torch.ones(imgs.shape, device="cuda:0")
+    return (-imgs*mask).mean()
+
+def increase_vertical_orientation_loss(imgs, mask=None):
     if(mask is None):
         mask = torch.ones(imgs.shape, device="cuda:0")
     sobel_y = torch.abs(sobel(imgs, 0, "cuda:0"))
-    return -sobel_y[mask > 0.5].mean()
+    return (-sobel_y*mask).mean()
 
-def horizontal_orientation_loss(imgs, mask=None):
+def decrease_vertical_orientation_loss(imgs, mask=None):
+    if(mask is None):
+        mask = torch.ones(imgs.shape, device="cuda:0")
+    sobel_y = torch.abs(sobel(imgs, 0, "cuda:0"))
+    return (sobel_y*mask).mean()
+
+def increase_horizontal_orientation_loss(imgs, mask=None):
     if(mask is None):
         mask = torch.ones(imgs.shape, device="cuda:0")
     sobel_x = torch.abs(sobel(imgs, 1, "cuda:0"))
-    return -sobel_x[mask > 0.5].mean()
+    return (-sobel_x*mask).mean()
+
+def decrease_horizontal_orientation_loss(imgs, mask=None):
+    if(mask is None):
+        mask = torch.ones(imgs.shape, device="cuda:0")
+    sobel_x = torch.abs(sobel(imgs, 1, "cuda:0"))
+    return (sobel_x*mask).mean()
 
 def load_latest_model():
     model_args = dict(
@@ -156,9 +186,8 @@ def load_latest_model():
     model.GAN.train(False)
     return model
 
-def optimize_on(model, noise, losses, masks, iterations, save_every = 1):
+def optimize_on(model, noise, img_noises, losses, masks, iterations, save_every = 1):
 
-    img_noises = image_noise(1, 128, device = 0)
     optimizer = optim.Adam([noise], lr=0.01)
     imgs_over_time = []
 
@@ -183,7 +212,50 @@ def optimize_on(model, noise, losses, masks, iterations, save_every = 1):
             j += 1
         
         optimizer.step()
-    return imgs_over_time
+    return imgs_over_time, noise
+
+def optimize_with(model, optimizer, noise, img_noises, 
+losses, masks, iterations, heightmap_full_resolution, save_every=1):
+    if(optimizer is None):
+        optimizer = optim.Adam([noise], lr=0.01)
+    imgs_over_time = []
+
+    for i in range(iterations):
+        optimizer.zero_grad()
+        # Having the default 0.75 trunc_psi causes gradients to be lost, so we must use None
+        styles  = noise_to_styles(model, noise, trunc_psi = None)  # pass through mapping network
+        images  = styles_to_images(model, styles, img_noises) # call the generator on intermediate style vectors
+        images = images[:,0:1,:,:]
+        img_resized = F.interpolate(images, 
+        size=[heightmap_full_resolution, heightmap_full_resolution],
+        mode='bicubic', align_corners=False)
+
+        if(i % save_every == 0):
+            imgs_over_time.append(get_img_from_tensor(img_resized, nrow=8))
+        
+        _losses = []
+        for j in range(len(losses)):
+            _losses.append(losses[j](images, masks[j]))
+        
+        j = 0
+        for loss in _losses:            
+            loss.backward(retain_graph=True)
+            print("%i/%i: loss%i=%0.04f" % (i+1, iterations, j, loss.item()))
+            j += 1
+        
+        optimizer.step()
+    return imgs_over_time, noise, optimizer
+
+def feed_forward(model, noise, img_noises, heightmap_full_resolution):
+    styles  = noise_to_styles(model, noise, trunc_psi = None)
+    images  = styles_to_images(model, styles, img_noises) 
+    images = images[:,0:1,:,:]
+    img_resized = F.interpolate(images, 
+    size=[heightmap_full_resolution, heightmap_full_resolution],
+    mode='bicubic', align_corners=False)
+    return get_img_from_tensor(img_resized, nrow=8)
+
+
 
 if __name__ == '__main__':
     model = load_latest_model()
@@ -193,13 +265,14 @@ if __name__ == '__main__':
     name = 'default'
     
     iterations = 100
-    num_images = 64
     img_resolution = 128
+    num_images = 64
 
-    noise   = torch.randn(num_images, 512).cuda()
+    noise   = torch.randn(num_images, 512).cuda()    
+    img_noises = image_noise(1, 128, device = 0)
     noise.requires_grad = True
-    losses = [elevation_loss]
-    masks = [torch.ones([num_images, 1, img_resolution, img_resolution])]
-    imgs_over_time = optimize_on(model, noise, losses, masks, iterations)
-
-    imageio.mimwrite("images_over_time.gif", imgs_over_time)
+    #losses = [lower_heightmap_loss]
+    #masks = [torch.ones([num_images, 1, img_resolution, img_resolution])]
+    #imgs_over_time, noise = optimize_on(model, noise, img_noises, losses, masks, iterations)
+    imgs = feed_forward(model, noise, img_noises, 128)
+    imageio.imwrite("random_imgs.png", imgs)
