@@ -134,3 +134,4 @@ dmypy.json
 /results
 /Subset
 /models
+*.meta
