@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Text;
 
 
 public class HeightMapGenerator : MonoBehaviour
@@ -8,7 +9,7 @@ public class HeightMapGenerator : MonoBehaviour
 
     private bool inProcess = false;
 
-    public int currentHeightMapResolution = 128;
+    private int currentHeightMapResolution = 128;
     public Terrain terrain;
     //public GameObject HeightmapAttributeEditorParent;
 
@@ -39,6 +40,41 @@ public class HeightMapGenerator : MonoBehaviour
         currentRequest = request;
     }*/
 
+    public int GetTotalIterations(){
+        if(heightMapRequestor != null){
+            return heightMapRequestor.totalIters;
+        }
+        else return 0;
+    }
+    public int GetCurrentIteration(){
+        if(heightMapRequestor != null){
+            return heightMapRequestor.currentIter;
+        }
+        else return 0;
+    }
+    public IEnumerator SetCurrentIter(int i){
+        if(heightMapRequestor != null && !inProcess &&
+        i >= 0 && i < GetTotalIterations()){
+            inProcess = true;
+            bool isfixed = false;
+            heightMapRequestor.iteration_to_revert_to = i;
+            heightMapRequestor.undo = true;
+            while(!isfixed){
+                if(heightMapRequestor.hasNewData){
+                    heightMapRequestor.hasNewData = false;
+                    terrain.terrainData.SetHeights(0, 0, 
+                    heightMapRequestor.heightmapvalues);
+                    isfixed = true;
+                    updateTexture();
+                }
+                yield return null;
+            }
+            inProcess = false;
+        }
+    }
+    public void SetHeightMapResolution(int i){
+        currentHeightMapResolution = i;
+    }
     public void getRequestMessageFromRects(List<Rect> rects, List<int> losses, string[] lossStrings){
         string request = "";        
         int heightmapsize = HeightMapRequester.heightMapSize;
@@ -93,14 +129,17 @@ public class HeightMapGenerator : MonoBehaviour
         Debug.Log("Initializing connection");
         heightMapRequestor = new HeightMapRequester();
         heightMapRequestor.Start();
+        inProcess = false;
         return true;
     }
 
     public void Disconnect(){
-        Debug.Log("Ending connection");
-        heightMapRequestor.StopServerAndStop();
-        heightMapRequestor = null;
-        inProcess = false;
+        if(heightMapRequestor != null){
+            Debug.Log("Ending connection");
+            heightMapRequestor.StopServerAndStop();
+            heightMapRequestor = null;
+            inProcess = false;            
+        }
     }
     
     private void updateTexture(){        
@@ -142,12 +181,73 @@ public class HeightMapGenerator : MonoBehaviour
         }
     }
 
-    public IEnumerator Undo(){
+    public IEnumerator GetNewStyle(){
         if(heightMapRequestor != null && !inProcess){
             bool isfixed = false;
-            heightMapRequestor.undo = true;
-
+            heightMapRequestor.newStyle = true;
             inProcess = true;
+            
+            while(!isfixed){
+                if(heightMapRequestor.hasNewData){
+                    heightMapRequestor.hasNewData = false;
+                    terrain.terrainData.SetHeights(0, 0, 
+                    heightMapRequestor.heightmapvalues);
+                    isfixed = true;
+                    updateTexture();
+                }
+                yield return null;
+            }
+            inProcess = false;
+        }
+    }
+    public IEnumerator UpdateLockedStyles(bool[] lockedStyles){
+        if(heightMapRequestor != null && !inProcess){
+            bool isfixed = false;
+            StringBuilder sb = new StringBuilder();
+            for(int i = 0; i < lockedStyles.Length; i++){
+                sb.Append(lockedStyles[i] ? "1" : "0");
+                if(i < lockedStyles.Length - 1){
+                    sb.Append(",");
+                }
+            }
+            heightMapRequestor.lockedStyleRequestString = sb.ToString();
+            heightMapRequestor.updateLockedStyles = true;
+            inProcess = true;
+            
+            while(!isfixed){
+                if(heightMapRequestor.hasNewData){
+                    heightMapRequestor.hasNewData = false;
+                    isfixed = true;
+                }
+                yield return null;
+            }
+            inProcess = false;
+        }
+    }
+    public IEnumerator GetNewStyle(int i){
+        if(heightMapRequestor != null && !inProcess){
+            bool isfixed = false;
+            heightMapRequestor.newStyleForResolution = i;
+            inProcess = true;
+            
+            while(!isfixed){
+                if(heightMapRequestor.hasNewData){
+                    heightMapRequestor.hasNewData = false;
+                    terrain.terrainData.SetHeights(0, 0, 
+                    heightMapRequestor.heightmapvalues);
+                    isfixed = true;
+                    updateTexture();
+                }
+                yield return null;
+            }
+            inProcess = false;
+        }
+    }
+    public IEnumerator GetAllNewStyles(){
+        if(heightMapRequestor != null && !inProcess){
+            bool isfixed = false;
+            heightMapRequestor.allNewStyles = true;
+            
             while(!isfixed){
                 if(heightMapRequestor.hasNewData){
                     heightMapRequestor.hasNewData = false;

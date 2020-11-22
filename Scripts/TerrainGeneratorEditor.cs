@@ -39,12 +39,13 @@ public class TerrainGeneratorEditor : Editor
     private int padding = 10;
 
     private int maxRect = 500;
+    private int heightMapRes = 128;
     private int textureResolution = 128;
     private float brushSize = 10;
     private float brushIntensity = 1.0f;
 
     private bool connected = false;
-
+    private bool[] styleLocked = new bool[6];
     private Rect lastRect = new Rect();    
     private Rect lastBackgroundRect = new Rect();
     private Rect backgroundRect = new Rect();
@@ -54,22 +55,13 @@ public class TerrainGeneratorEditor : Editor
     private List<bool> lossEnabled = new List<bool>();
     private List<float[,]> lossMasks = new List<float[,]>();
     private List<Color> lossMaskColors = new List<Color>();
-    private List<Rect> lossRects = new List<Rect>();
-    private List<Rect> relativeLossRects = new List<Rect>();
     private int lossIndSelected = 0;
     float currentWidth = 0;
 
-    private bool holdingRect = false;
-    private bool movingRect = false;
-    private bool scalingRectx = false;
-    private bool scalingRecty = false;
-    private Rect selectedRect = new Rect();
-    private int rectIndSelected = 0;
-    private int rectGUIclicked = 0;
-
-    private Vector2 lastMouseClickPosition = new Vector2();
-    private Vector2 lastMouseDragPosition = new Vector2();
-
+    private bool showInstructions = false;
+    private bool showTipsAndTricks = false;
+    private bool showDebugging = false;
+    
     private float lastTextureUpdate = 0;
     private float updateEvery = 0.016f;
 
@@ -95,10 +87,15 @@ public class TerrainGeneratorEditor : Editor
                 requestStrings.Add(sb.ToString());
             }
         }
-        Debug.Log("This takes a long time?");
         return requestStrings;
     }
-
+    private bool atLeastOneStyleUnlocked(){
+        bool oneUnlocked = false;
+        for(int i = 0; i < styleLocked.Length && !oneUnlocked; i++){
+            oneUnlocked = !styleLocked[i];
+        }
+        return oneUnlocked;
+    }
     private void updateLossTexture(){
         lossTexture = new Texture2D(textureResolution, textureResolution);
         
@@ -154,79 +151,10 @@ public class TerrainGeneratorEditor : Editor
         lossMaskColors.RemoveAt(i);
         lossSelected.RemoveAt(i);
     }
-    private void updateRelativeRects(){
-        for(int i = 0; i < lossRects.Count; i++){
-            Rect absoluteRect = lossRects[i];
-            Rect relativeRect = relativeLossRects[i];
-            relativeRect.x = (absoluteRect.x - backgroundRect.x) / backgroundRect.width;
-            relativeRect.y = (absoluteRect.y - backgroundRect.y) / backgroundRect.height;
-            relativeRect.width = absoluteRect.width / backgroundRect.width;
-            relativeRect.height = absoluteRect.height / backgroundRect.height;
-            relativeLossRects[i] = relativeRect;
-        }
-    }
-    private void updateRelativeRectsClamp(){
-        for(int i = 0; i < lossRects.Count; i++){
-            Rect absoluteRect = lossRects[i];
-            Rect relativeRect = relativeLossRects[i];
-            
-            if(relativeRect.width < 0){
-                relativeRect.x += relativeRect.width;
-                relativeRect.width *= -1;
-            }
-            if(relativeRect.height < 0){
-                relativeRect.y += relativeRect.height;
-                relativeRect.height *= -1;
-            }
-            if(relativeRect.x < 0){
-                relativeRect.width += relativeRect.x;
-                relativeRect.x = 0;
-            }            
-            if(relativeRect.x > 1){
-                relativeRect.width -= (relativeRect.x - 1);
-                relativeRect.x = 1.0f;
-            }
-            if(relativeRect.y < 0){
-                relativeRect.height += relativeRect.y;
-                relativeRect.y = 0;
-            }            
-            if(relativeRect.y > 1){
-                relativeRect.height -= (relativeRect.y - 1);
-                relativeRect.y = 1.0f;
-            }
-            if(relativeRect.x+relativeRect.width > 1){
-                relativeRect.width -= (relativeRect.x + relativeRect.width - 1);
-            }
-            if(relativeRect.y+relativeRect.height > 1){
-                relativeRect.height -= (relativeRect.y + relativeRect.height - 1);
-            }
-
-
-
-            relativeLossRects[i] = relativeRect;
-        }
-    }
-    private void updateAbsoluteRects(){
-        for(int i = 0; i < lossRects.Count; i++){
-            Rect absoluteRect = lossRects[i];
-            Rect relativeRect = relativeLossRects[i];
-
-            absoluteRect.x = backgroundRect.x + backgroundRect.width * relativeRect.x;
-            absoluteRect.y = backgroundRect.y + backgroundRect.height * relativeRect.y;
-            absoluteRect.width = relativeRect.width * backgroundRect.width;
-            absoluteRect.height = relativeRect.height * backgroundRect.height;
-            lossRects[i] = absoluteRect;
-        }
-    }
-    private bool clickInRect(Vector2 position, Rect box){
-        return position.x > box.x &&
-        position.x < box.x + box.width &&
-        position.y > box.y &&
-        position.y < box.y + box.height;
-    }
+    
     private void mouseDownEvent(){
         Vector2 mousePos = Event.current.mousePosition;
-        lastMouseClickPosition = mousePos;
+
         if(clickInRect(mousePos, backgroundRect)){
             Vector2 relativeMousePos = new Vector2();
             relativeMousePos.x = Mathf.Clamp((mousePos.x - backgroundRect.x) 
@@ -235,57 +163,12 @@ public class TerrainGeneratorEditor : Editor
             / backgroundRect.height, 0.0f, 1.0f);
             drawCircle(relativeMousePos);
         }
-        /*
-        if(clickInRect(mousePos, backgroundRect)){
-            // Check if the box we have selected is clicked first
-            if(!holdingRect && rectGUIclicked < lossRects.Count){
-                if(clickInRect(mousePos, lossRects[rectGUIclicked])){
-                    holdingRect = true;
-                    selectedRect = lossRects[rectGUIclicked];
-                    rectIndSelected = rectGUIclicked;
-                    
-
-                    movingRect = true;
-                    lastMouseDragPosition = mousePos;
-                }
-            }
-            // Then check all others
-            for(int i = 0; i < lossRects.Count && !holdingRect; i++){
-                if(clickInRect(mousePos, lossRects[i])){
-                    holdingRect = true;
-                    selectedRect = lossRects[i];
-                    rectIndSelected = i;
-                    rectGUIclicked = i;
-
-                    movingRect = true;
-                    lastMouseDragPosition = mousePos;
-                }
-            }
-
-            // If no existing box was clicked, make a new one
-            if(!holdingRect){
-                Rect newRect = new Rect(mousePos.x, mousePos.y, 1f, 1f);
-                lastMouseDragPosition = mousePos;
-                holdingRect = true;
-                scalingRectx = true;
-                scalingRecty = true;
-                selectedRect = newRect;
-                lossRects.Add(newRect);
-                lossEnabled.Add(true);
-                lossMasks.Add(new bool[textureResolution, textureResolution]);
-                lossMaskColors.Add(new Color(1, 1, 1, 1));
-                relativeLossRects.Add(new Rect(mousePos.x, mousePos.y, 0.001f, 0.001f));
-                lossSelected.Add(0);
-                rectGUIclicked = lossRects.Count - 1;
-                rectIndSelected = lossRects.Count - 1;
-            }
-        }
-        else{
-            
-        }
-        */
     }
 
+    private bool clickInRect(Vector2 pos, Rect r){
+        return pos.x > r.x && pos.x < r.x+r.width &&
+        pos.y > r.y && pos.y < r.y+r.height;
+    }
     private void drawCircle(Vector2 relativeMousePos){
         int absMousePosx = (int)(relativeMousePos.x *(textureResolution));
         int absMousePosy = (int)(relativeMousePos.y *(textureResolution));
@@ -318,43 +201,10 @@ public class TerrainGeneratorEditor : Editor
             / backgroundRect.height, 0.0f, 1.0f);
             drawCircle(relativeMousePos);
         }
-        /*
-        if(holdingRect){
-            Rect aRect = lossRects[rectIndSelected];
-            
-            if(scalingRectx){
-                float diff = (mousePos.x - lastMouseDragPosition.x);
-                //Debug.Log("Scaling in x: " + diff);
-                aRect.width = aRect.width + diff;                
-            } 
-            
-            if(scalingRecty){
-                float diff = (mousePos.y - lastMouseDragPosition.y);
-                //Debug.Log("Scaling in y: " + diff);
-                aRect.height = aRect.height + diff;                    
-            }
-            if(movingRect){
-                float diffx = (mousePos.x - lastMouseDragPosition.x);
-                float diffy = (mousePos.y - lastMouseDragPosition.y);
-                aRect.x = aRect.x + diffx;       
-                aRect.y = aRect.y + diffy;      
-            }
-            lossRects[rectIndSelected] = aRect;
-            updateRelativeRects();
-        }
-        lastMouseDragPosition = mousePos;
-        */
+        
     }
     private void mouseUpEvent(){
-        /*
-        holdingRect = false;
-        scalingRectx = false;
-        scalingRecty = false;
-        movingRect = false;
-        updateRelativeRectsClamp();
-        updateAbsoluteRects();
-        updateRelativeRects();
-        */
+        
     }
     public override bool RequiresConstantRepaint()
     {
@@ -385,13 +235,111 @@ public class TerrainGeneratorEditor : Editor
             mouseUpEvent();
         }
 
+        EditorGUILayoutUtility.HorizontalLine(new Vector2(20f, 20f));
+        EditorStyles.label.wordWrap = true;
+        showInstructions = EditorGUILayout.Foldout(showInstructions, "Instructions");
+        if(showInstructions){
+            EditorGUILayout.LabelField("This tool is connects Unity to a Python-based server " +
+            "that hosts a neural network trained to generate realistic looking heightmaps.");
+            EditorGUILayout.LabelField("The output heightmaps are resolved at 128x128, but trained with 512x512 " +
+            " heightmaps with a 3 arcsecond " +
+            "resolution, which means that each pixel is 90m by 90m. Therefore, the returned heightmaps " +
+            "are of size 46km x 46km and will have features of that size, making it not a great " +
+            "tool if you aim to make a smaller terrain");
+            EditorGUILayout.LabelField("First, ensure the python server is running. With 'python server_for_unity.py'");
+            EditorGUILayout.LabelField("Next, click the 'connect' button in this tool. When you'd like to shut "+
+            "the server down, click disconnect (required, otherwise the server will continue to run " +
+            "after closing Unity)");
+            EditorGUILayout.LabelField("The heightmap generation process uses two main components: "+
+            "the style and the noise. The style guides the overall look of the current heightmap and "+
+            "dictates key features like mountain ranges and canyons. The noise gives small perturbations " +
+            "to the output from a specific style. Clicking 'new noise' and 'new style' will " +
+            "give you a new noise or style to work with.");
+            EditorGUILayout.LabelField("Every time a change is made, it is saved and can be reverted to by "+
+            "using the 'iteration' slider.");
+            GUILayout.Space(10);
+            EditorGUILayout.LabelField("The main control over the neural network comes in the form of rules.");
+            EditorGUILayout.LabelField("Rules allow the user to tell the neural network what kinds of output " +
+            "we want. There rules are as follows:");
+            EditorGUILayout.LabelField("Exact height: the network will try to match the exact height given to it");
+            EditorGUILayout.LabelField("Raise: the network will try to maximize height in certain areas");
+            EditorGUILayout.LabelField("Lower: the network will try to minimize height in certain areas");
+            EditorGUILayout.LabelField("Ridges: the network will try to make this area more slanted/rigid");
+            EditorGUILayout.LabelField("Smooth: the network will try to smooth out this area");
+            EditorGUILayout.LabelField("Increase horizontal alignment: the network will try to make patterns "+
+            "that follow a left-right pattern");
+            EditorGUILayout.LabelField("Decrease horizontal alignment: the network will try to avoid patterns "+
+            "that follow a left-right pattern");
+            EditorGUILayout.LabelField("Increase vertical alignment: the network will try to make patterns "+
+            "that follow an up-down pattern");
+            EditorGUILayout.LabelField("Decrease vertical alignment: the network will try to make patterns "+
+            "that follow an up-down pattern");
+            EditorGUILayout.LabelField("These rules can be added by clicking the 'add rule' button, and then " +
+            "selecting the rule desired with the dropdown. Then, the user can draw in the space above.");
+            EditorGUILayout.LabelField("Drawing will draw with a brush diameter chosen with the brush size slider, and an "+
+            "intensity of the intensity slider. The intensity determines how important it is for the "+
+            "network to follow the rule in that location. High intensity (near 1) means we really want "+
+            "the network to have this rule at this location, and low intensity means that it is not as " +
+            "important. When intensity is 0 (default across the entire rule), the network won't try to "+
+            "follow the rule at all in that spot. The only time intensity is something else is when Exact height is used, in " +
+            "which case the network will try to match the exact heightmap drawn.");
+            EditorGUILayout.LabelField("When drawing, only the rule selected (highlighted yellow) is updated. "+
+            "A rule can be selected by clicking 'Select' next to it.");
+            EditorGUILayout.LabelField("The color for different rules can be changed with the rule color.");
+            EditorGUILayout.LabelField("Rules can be enabled or disabled by clicking the checkmark for " +
+            "rule enabled.");
+            
+            EditorGUILayout.LabelField("When a desired ruleset is made, the user can click 'Train' to begin " +
+            "the optimization process. The network will try to create a realistic heightmap " + 
+            "that follows the rules created. While it is training for 100 steps, the terrain " +
+            "will be updated in realtime. Any iteration during training can be reverted to " +
+            "by chosing the iteration using the slider.");
+            }
+
+        
+        
+        GUILayout.Space(10);
+        showTipsAndTricks = EditorGUILayout.Foldout(showTipsAndTricks, "Tips and tricks");
+        if(showTipsAndTricks){
+            EditorGUILayout.LabelField("1. Having too steep changes too close can make it difficult sometimes " +
+            "for the network to optimize. Consider adding a buffer zone of 0 intensity between " + 
+            "large changes. For instance, if you'd like high elevation on the top and low elevation " +
+            "on the bottom half, perhaps leave the middle third of the rule area with 0 intensity " +
+            "so the network can be flexible in that area.");        
+            EditorGUILayout.LabelField("2. If the trained output heightmap doesn't match the rules close " +
+            "enough for your liking you can click 'train' again.");
+            EditorGUILayout.LabelField("3. If the output is close to what you like, try clicking " + 
+            "new noise to see small changes in your output");        
+            EditorGUILayout.LabelField("4. Use colormaps to give easy visualizations for rules you created. " +
+            "For instance, use green for a rule to increase horizontal orientation, and red " +
+            "to reduce horizontal orientation.");        
+            EditorGUILayout.LabelField("5. Avoid setting the resolution above 128. It will slow down performance.");
+        }
+        GUILayout.Space(10);
+        showDebugging = EditorGUILayout.Foldout(showDebugging, "Debugging");
+        if(showDebugging){
+            EditorGUILayout.LabelField("If the server seems unresponsive, check the python script. " +
+            "If it is still alive, try clicking connect again in Unity and try your command again. "+
+            "If that still doesn't work, you'll have to click connect, disconnect, and then start over again.");
+        }
+
+        EditorGUILayoutUtility.HorizontalLine(new Vector2(20f, 20f));
 
         HeightMapGenerator myScript = (HeightMapGenerator)target;
 
+        EditorGUILayout.BeginHorizontal();
         if(GUILayout.Button("Connect"))
         {            
             connected = myScript.Connect();
         }
+        
+        if(GUILayout.Button("Disconnect"))
+        {
+            myScript.Disconnect();
+            connected = false;
+        }
+        EditorGUILayout.EndHorizontal();
+        
         if (Event.current.type == EventType.Repaint){
             lastRect = GUILayoutUtility.GetLastRect();
         }
@@ -408,13 +356,7 @@ public class TerrainGeneratorEditor : Editor
             backgroundRect = new Rect(middle - rectWidth / 2,
             lastRect.y + lastRect.height + padding,
             rectWidth, rectWidth);
-            if(backgroundRect.x != lastBackgroundRect.x ||
-            backgroundRect.y != lastBackgroundRect.y ||
-            backgroundRect.width != lastBackgroundRect.width ||
-            backgroundRect.height != lastBackgroundRect.height){
-                updateAbsoluteRects();
-            }
-            EditorGUI.DrawRect(backgroundRect, Color.black);
+           
             if(lossTexture != null){
                 EditorGUI.DrawPreviewTexture(backgroundRect, lossTexture);
             }
@@ -476,76 +418,83 @@ public class TerrainGeneratorEditor : Editor
             AddRule();
         }
         
-        /*
-        EditorGUILayout.EndHorizontal();
-        GUILayout.ExpandWidth (false);
-        EditorGUILayout.BeginHorizontal();
-        GUILayout.Label("Rule number"); 
-        GUILayout.Label("Rule");
-        GUILayout.Label("");
-        GUILayout.Label("");
-        EditorGUILayout.EndHorizontal();
-
-
-        //EditorGUILayoutUtility.HorizontalLine(new Vector2(1f, 1f));
-        
-        for(int i = 0; i < lossRects.Count; i++){
-            if(i == rectGUIclicked){
-                EditorGUI.DrawRect(lossRects[i], new Color(1.0f, 1.0f, 0f, 0.5f));
-            }
-            else{
-                EditorGUI.DrawRect(lossRects[i], new Color(1.0f, 0f, 0f, 0.5f));
-            }
-            EditorGUIUtility.labelWidth = 30;
-
-            Rect r = EditorGUILayout.BeginHorizontal(AreaStyleNoMargin);
-            GUILayout.Label("Rule " + (i+1));
-            lossSelected[i] = EditorGUILayout.Popup("", lossSelected[i], 
-            lossOptions); 
-            
-            //GUILayout.Label(lossRects[i].ToString());
-            if(GUILayout.Button("Select")){
-                rectGUIclicked = i;
-            }
-            if(GUILayout.Button("Delete")){
-                lossRects.RemoveAt(i);
-                relativeLossRects.RemoveAt(i);
-                lossSelected.RemoveAt(i);
-                i--;
-            }
-            EditorGUILayout.EndHorizontal();
-        }
-        */
-
-        
         EditorGUI.BeginDisabledGroup(!connected);
         EditorGUI.BeginDisabledGroup(myScript.IsInProcess());
         if(GUILayout.Button("Train"))
         {
-            //myScript.getRequestMessageFromRects(relativeLossRects, lossSelected, lossOptions);
-            
-            myScript.setRequestFromMasks(masksToRequestStrings());
-            EditorCoroutineUtility.StartCoroutine(myScript.GetHeightMapAsync(), this);
+            if(atLeastOneStyleUnlocked()){
+                myScript.setRequestFromMasks(masksToRequestStrings());
+                EditorCoroutineUtility.StartCoroutine(myScript.GetHeightMapAsync(), this);
+            }
+            else{
+                Debug.Log("Need at least one style unlocked to train");
+            }
         }
+        EditorGUILayout.BeginHorizontal();
+        GUILayout.Label("Iteration:");
+        int tempIterationChosen = EditorGUILayout.IntSlider(
+            myScript.GetCurrentIteration(), 0, myScript.GetTotalIterations()-1);
+        if(tempIterationChosen != myScript.GetCurrentIteration()){
+            EditorCoroutineUtility.StartCoroutine(myScript.SetCurrentIter(tempIterationChosen), this);
+        }        
+        EditorGUILayout.EndHorizontal();
+
         EditorGUILayoutUtility.HorizontalLine(new Vector2(20f, 20f));
-        if(GUILayout.Button("New noise"))
+        
+        wid = Screen.width*(1f/3f);
+
+        EditorGUILayout.BeginHorizontal();
+
+        if(GUILayout.Button("New noise", GUILayout.Width(wid)))
         {
             EditorCoroutineUtility.StartCoroutine(myScript.GetNewNoise(), this);
         }
+        if(GUILayout.Button("All new styles", GUILayout.Width(wid)))
+        {
+            EditorCoroutineUtility.StartCoroutine(myScript.GetAllNewStyles(), this);
+        }
+        /*
+        if(GUILayout.Button("New style"))
+        {
+            EditorCoroutineUtility.StartCoroutine(myScript.GetNewStyle(), this);
+        }
+        */
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.BeginHorizontal();
+        GUILayout.Label("Style size", GUILayout.Width(wid));
+        GUILayout.Label("Get new random style", GUILayout.Width(wid));
+        GUILayout.Label("Lock in training", GUILayout.Width(wid));
+        EditorGUILayout.EndHorizontal();
+
+        for(int i = 0; i < 6; i++){
+            EditorGUILayout.BeginHorizontal();
+            int currSize = (int)(Mathf.Pow(2, 2+i));
+            GUILayout.Label(currSize+"x"+currSize+ " style", GUILayout.Width(wid));
+            if(GUILayout.Button("New style", GUILayout.Width(wid)))
+            {
+                EditorCoroutineUtility.StartCoroutine(myScript.GetNewStyle(i), this);
+            }
+            bool tempBool = EditorGUILayout.Toggle("", styleLocked[i], GUILayout.Width(wid));
+            if(tempBool != styleLocked[i]){
+                styleLocked[i] = tempBool;
+                EditorCoroutineUtility.StartCoroutine(myScript.UpdateLockedStyles(styleLocked), this);
+            }
+            EditorGUILayout.EndHorizontal();
+        }
+        
+        EditorGUILayout.BeginHorizontal();
+        int tempHeightMapRes = EditorGUILayout.IntSlider(heightMapRes, 32, 1024); 
+        int exp = (int)(Mathf.Log(tempHeightMapRes, 2));
+        heightMapRes = (int)(Mathf.Pow(2, exp));
         if(GUILayout.Button("Update resolution"))
         {
+            myScript.SetHeightMapResolution(heightMapRes);
             EditorCoroutineUtility.StartCoroutine(myScript.UpdateHeightmapResolution(), this);
         }
-        if(GUILayout.Button("Undo"))
-        {
-            EditorCoroutineUtility.StartCoroutine(myScript.Undo(), this);
-        }
+        EditorGUILayout.EndHorizontal();
+        
         EditorGUI.EndDisabledGroup();
-        if(GUILayout.Button("Disconnect"))
-        {
-            myScript.Disconnect();
-            connected = false;
-        }
         EditorGUI.EndDisabledGroup();
 
         Rect tempRect = GUILayoutUtility.GetLastRect();
@@ -556,7 +505,6 @@ public class TerrainGeneratorEditor : Editor
             whereToDraw.width = backgroundRect.width;
             whereToDraw.height = backgroundRect.width;
             GUILayout.Space(whereToDraw.height + 2*padding);
-            //EditorGUI.DrawRect(whereToDraw, Color.white);
             EditorGUI.DrawPreviewTexture(whereToDraw, myScript.getTexture());
         }
         lastBackgroundRect = backgroundRect;

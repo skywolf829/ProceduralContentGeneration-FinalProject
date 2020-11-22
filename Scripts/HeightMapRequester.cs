@@ -16,11 +16,18 @@ public class HeightMapRequester : RunAbleThread
     public bool hasNewData = false;
     public bool isProcessing = false;
     public bool newNoise = false;
+    public bool newStyle = false;
     public bool undo = false;
     public bool canStop = false;
     public bool updateHeightmapResolution = false;
-    
+    public int iteration_to_revert_to = 0;
+    public int totalIters = 0;
+    public int currentIter = 0;
     public bool connected = false;
+    public int newStyleForResolution = -1;
+    public bool allNewStyles = false;
+    public bool updateLockedStyles = false;
+    public string lockedStyleRequestString = "";
     public float[,] heightmapvalues = 
         new float[HeightMapRequester.heightMapSize,
         HeightMapRequester.heightMapSize];
@@ -52,13 +59,14 @@ public class HeightMapRequester : RunAbleThread
                     this.Stop();
                 }
                 if(newRequest){
-                    Debug.Log("Got new request");
                     string message = "";
+                    string iterMessage = "";
                     while(!message.Equals("finished")){
                         //client.SendFrame("requesting_heightmap,"+this.request);
                         client.SendFrame("requesting_heightmap_with_masks,"+this.request);
                         newRequest = false;
                         bool gotMessage = false;
+                        bool gotIter = false;
                         double startTime = DateTime.Now.Ticks / 1e7;
                         while (!gotMessage && DateTime.Now.Ticks / 1e7 - startTime < 10.0)
                         {
@@ -74,25 +82,56 @@ public class HeightMapRequester : RunAbleThread
                                 int c = (int) ((int)(i/3)/HeightMapRequester.heightMapSize);
                                 heightmapvalues[r, c] = (float)data[i] / 255.0f;
                             }
+                            client.SendFrame("iterations");
+                            startTime = DateTime.Now.Ticks / 1e7;
+                            while (!gotIter && DateTime.Now.Ticks / 1e7 - startTime < 10.0)
+                            {
+                                gotIter = client.TryReceiveFrameString(out iterMessage);
+                            }
+                            if(gotIter){
+                                totalIters = Int32.Parse(iterMessage);
+                                currentIter = totalIters - 1;
+                            }                        
                             hasNewData = true;
                         }
                         else if(gotMessage && message.Equals("finished")){
-                            Debug.Log("Finished iterating");
+
                         }
                         else{
                             Debug.Log("Response timed out.");
-                            message = "";
+                            message = "finished";
                         }
                         Thread.Yield();
                     }       
                     isProcessing = false;              
                 }
-                
+                if(updateLockedStyles){
+                    updateLockedStyles = false;
+                    client.SendFrame("update_locked_styles,"+lockedStyleRequestString);
+                    string message = "";
+                    bool gotMessage = false;
+                    double startTime = DateTime.Now.Ticks / 1e7;
+                    while (!gotMessage && DateTime.Now.Ticks / 1e7 - startTime < 10.0)
+                    {
+                        gotMessage = client.TryReceiveFrameString(out message); // this returns true if it's successful
+                    }
+                    if (gotMessage && message.Equals("finished")){                            
+                        
+                        Debug.Log("Updated locked styles");
+                        hasNewData = true;
+                    }
+                    else{
+                        Debug.Log("Response timed out");
+                        message = "";
+                    }
+                }
                 if(newNoise){
                     newNoise = false;
                     client.SendFrame("new_noise");
                     string message = "";
+                    string iterMessage = "";
                     bool gotMessage = false;
+                    bool gotIter = false;
                     double startTime = DateTime.Now.Ticks / 1e7;
                     while (!gotMessage && DateTime.Now.Ticks / 1e7 - startTime < 10.0)
                     {
@@ -109,6 +148,136 @@ public class HeightMapRequester : RunAbleThread
                             heightmapvalues[r, c] = (float)data[i] / 255.0f;
                         }
                         Debug.Log("Updated new noise map");
+                        client.SendFrame("iterations");
+                        startTime = DateTime.Now.Ticks / 1e7;
+                        while (!gotIter && DateTime.Now.Ticks / 1e7 - startTime < 10.0)
+                        {
+                            gotIter = client.TryReceiveFrameString(out iterMessage);
+                        }
+                        if(gotIter){
+                            totalIters = Int32.Parse(iterMessage);
+                            currentIter = totalIters - 1;
+                        }                        
+                        hasNewData = true;
+                    }
+                    else{
+                        Debug.Log("Response timed out");
+                        message = "";
+                    }
+                }
+                if(allNewStyles){
+                    allNewStyles = false;
+                    client.SendFrame("all_new_styles");
+                    string message = "";
+                    string iterMessage = "";
+                    bool gotMessage = false;
+                    bool gotIter = false;
+                    double startTime = DateTime.Now.Ticks / 1e7;
+                    while (!gotMessage && DateTime.Now.Ticks / 1e7 - startTime < 10.0)
+                    {
+                        gotMessage = client.TryReceiveFrameString(out message);
+                    }
+                    if (gotMessage){                            
+                        byte[] data = System.Convert.FromBase64String(message);
+                        heightmapvalues = 
+                            new float[HeightMapRequester.heightMapSize,
+                            HeightMapRequester.heightMapSize];
+                        for(int i = 0; i < data.Length; i+=3){
+                            int r = (int)(i/3) % (HeightMapRequester.heightMapSize);
+                            int c = (int) ((int)(i/3)/HeightMapRequester.heightMapSize);
+                            heightmapvalues[r, c] = (float)data[i] / 255.0f;
+                        }
+                        Debug.Log("Updated all styles");
+                        client.SendFrame("iterations");
+                        startTime = DateTime.Now.Ticks / 1e7;
+                        while (!gotIter && DateTime.Now.Ticks / 1e7 - startTime < 10.0)
+                        {
+                            gotIter = client.TryReceiveFrameString(out iterMessage);
+                        }
+                        if(gotIter){
+                            totalIters = Int32.Parse(iterMessage);
+                            currentIter = totalIters - 1;
+                        }                        
+                        hasNewData = true;
+                    }
+                    else{
+                        Debug.Log("Response timed out");
+                        message = "";
+                    }
+                }
+                if(newStyleForResolution > -1){
+                    client.SendFrame("new_style_for_resolution,"+newStyleForResolution);
+                    string message = "";
+                    string iterMessage = "";
+                    bool gotMessage = false;
+                    bool gotIter = false;
+                    double startTime = DateTime.Now.Ticks / 1e7;
+                    while (!gotMessage && DateTime.Now.Ticks / 1e7 - startTime < 10.0)
+                    {
+                        gotMessage = client.TryReceiveFrameString(out message);
+                    }
+                    if (gotMessage){                            
+                        byte[] data = System.Convert.FromBase64String(message);
+                        heightmapvalues = 
+                            new float[HeightMapRequester.heightMapSize,
+                            HeightMapRequester.heightMapSize];
+                        for(int i = 0; i < data.Length; i+=3){
+                            int r = (int)(i/3) % (HeightMapRequester.heightMapSize);
+                            int c = (int) ((int)(i/3)/HeightMapRequester.heightMapSize);
+                            heightmapvalues[r, c] = (float)data[i] / 255.0f;
+                        }
+                        Debug.Log("Updated new style for " + newStyleForResolution);
+                        client.SendFrame("iterations");
+                        startTime = DateTime.Now.Ticks / 1e7;
+                        while (!gotIter && DateTime.Now.Ticks / 1e7 - startTime < 10.0)
+                        {
+                            gotIter = client.TryReceiveFrameString(out iterMessage);
+                        }
+                        if(gotIter){
+                            totalIters = Int32.Parse(iterMessage);
+                            currentIter = totalIters - 1;
+                        }                        
+                        hasNewData = true;
+                    }
+                    else{
+                        Debug.Log("Response timed out");
+                        message = "";
+                    }
+                    newStyleForResolution = -1;
+                }
+                if(newStyle){
+                    newStyle = false;
+                    client.SendFrame("new_style");
+                    string message = "";
+                    string iterMessage = "";
+                    bool gotMessage = false;
+                    bool gotIter = false;
+                    double startTime = DateTime.Now.Ticks / 1e7;
+                    while (!gotMessage && DateTime.Now.Ticks / 1e7 - startTime < 10.0)
+                    {
+                        gotMessage = client.TryReceiveFrameString(out message);
+                    }
+                    if (gotMessage){                            
+                        byte[] data = System.Convert.FromBase64String(message);
+                        heightmapvalues = 
+                            new float[HeightMapRequester.heightMapSize,
+                            HeightMapRequester.heightMapSize];
+                        for(int i = 0; i < data.Length; i+=3){
+                            int r = (int)(i/3) % (HeightMapRequester.heightMapSize);
+                            int c = (int) ((int)(i/3)/HeightMapRequester.heightMapSize);
+                            heightmapvalues[r, c] = (float)data[i] / 255.0f;
+                        }
+                        Debug.Log("Updated new style");
+                        client.SendFrame("iterations");
+                        startTime = DateTime.Now.Ticks / 1e7;
+                        while (!gotIter && DateTime.Now.Ticks / 1e7 - startTime < 10.0)
+                        {
+                            gotIter = client.TryReceiveFrameString(out iterMessage);
+                        }
+                        if(gotIter){
+                            totalIters = Int32.Parse(iterMessage);
+                            currentIter = totalIters - 1;
+                        }                        
                         hasNewData = true;
                     }
                     else{
@@ -119,7 +288,7 @@ public class HeightMapRequester : RunAbleThread
                 if(undo){
                     undo = false;
                     string message = "";
-                    client.SendFrame("undo");
+                    client.SendFrame("undo,"+iteration_to_revert_to);
                     bool gotMessage = false;
                     double startTime = DateTime.Now.Ticks / 1e7;
                     while (!gotMessage && DateTime.Now.Ticks / 1e7 - startTime < 10.0)
@@ -137,6 +306,7 @@ public class HeightMapRequester : RunAbleThread
                             heightmapvalues[r, c] = (float)data[i] / 255.0f;
                         }
                         hasNewData = true;
+                        currentIter = iteration_to_revert_to;
                     }
                     else{
                         Debug.Log("Response timed out");

@@ -36,13 +36,11 @@ def noise_to_styles(model, noise, trunc_psi = None):
     return w
 
 def styles_to_images(model, w, noise):
-    batch_size, *_ = w.shape
     num_layers = model.GAN.G.num_layers
-    image_size = model.image_size
     w_def = [(w, num_layers)]
 
     w_tensors = styles_def_to_tensor(w_def)
-
+    print(noise.shape)
     images = model.GAN.G(w_tensors, noise)
     images.clamp_(0., 1.)
     return images
@@ -214,6 +212,38 @@ def optimize_on(model, noise, img_noises, losses, masks, iterations, save_every 
         optimizer.step()
     return imgs_over_time, noise
 
+def optimize_on_multistyle(model, noises, freeze_noises, img_noises, 
+losses, masks, iterations, save_every = 1):
+    optimize_on = []
+    for i in range(len(noises)):
+        if(not freeze_noises[i]):
+            optimize_on.append(noises[i])
+    optimizer = optim.Adam(optimize_on, lr=0.01)
+    imgs_over_time = []
+
+    for i in range(iterations):
+        optimizer.zero_grad()
+        # Having the default 0.75 trunc_psi causes gradients to be lost, so we must use None
+        multistyles  = noises_to_multistyles(model, noises, trunc_psi = None)  # pass through mapping network
+        images  = multistyles_to_images(model, multistyles, img_noises) # call the generator on intermediate style vectors
+        images = images[:,0:1,:,:]
+            
+        if(i % save_every == 0):
+            imgs_over_time.append(get_img_from_tensor(images, nrow=8))
+        
+        _losses = []
+        for j in range(len(losses)):
+            _losses.append(losses[j](images, masks[j]))
+        
+        j = 0
+        for loss in _losses:            
+            loss.backward(retain_graph=True)
+            print("%i/%i: loss%i=%0.04f" % (i+1, iterations, j, loss.item()))
+            j += 1
+        
+        optimizer.step()
+    return imgs_over_time, noises
+
 def optimize_with(model, optimizer, noise, img_noises, 
 losses, masks, iterations, heightmap_full_resolution, save_every=1):
     if(optimizer is None):
@@ -246,6 +276,44 @@ losses, masks, iterations, heightmap_full_resolution, save_every=1):
         optimizer.step()
     return imgs_over_time, noise, optimizer
 
+def optimize_with_multistyle(model, optimizer, noises, freeze_noises, img_noises, 
+losses, masks, iterations, heightmap_full_resolution, save_every=1):
+    optimize_on = []
+    
+    for i in range(len(noises)):
+        if(not freeze_noises[i]):
+            optimize_on.append(noises[i])
+
+    if(optimizer is None):
+        optimizer = optim.Adam(optimize_on, lr=0.01)
+    imgs_over_time = []
+
+    for i in range(iterations):
+        optimizer.zero_grad()
+        # Having the default 0.75 trunc_psi causes gradients to be lost, so we must use None
+        multistyles  = noises_to_multistyles(model, noises, trunc_psi = None)  # pass through mapping network
+        images  = multistyles_to_images(model, multistyles, img_noises) # call the generator on intermediate style vectors
+        images = images[:,0:1,:,:]
+        img_resized = F.interpolate(images, 
+        size=[heightmap_full_resolution, heightmap_full_resolution],
+        mode='bicubic', align_corners=False)
+
+        if(i % save_every == 0):
+            imgs_over_time.append(get_img_from_tensor(img_resized, nrow=8))
+        
+        _losses = []
+        for j in range(len(losses)):
+            _losses.append(losses[j](images, masks[j]))
+        
+        j = 0
+        for loss in _losses:            
+            loss.backward(retain_graph=True)
+            print("%i/%i: loss%i=%0.04f" % (i+1, iterations, j, loss.item()))
+            j += 1
+        
+        optimizer.step()
+    return imgs_over_time, noises, optimizer
+
 def feed_forward(model, noise, img_noises, heightmap_full_resolution):
     styles  = noise_to_styles(model, noise, trunc_psi = None)
     images  = styles_to_images(model, styles, img_noises) 
@@ -255,7 +323,35 @@ def feed_forward(model, noise, img_noises, heightmap_full_resolution):
     mode='bicubic', align_corners=False)
     return get_img_from_tensor(img_resized, nrow=8)
 
+def noises_to_multistyles(model, noises, trunc_psi=0.75):
+    ws = []
+    for i in range(len(noises)):
+        w = model.GAN.S(noises[i])
+        if exists(trunc_psi):
+            print("truncing")
+            w = model.truncate_style(w)
+        ws.append(w)
+    return ws
 
+def multistyles_to_images(model, ws, noise):
+    num_layers = model.GAN.G.num_layers
+    final_w = []
+    for i in range(len(ws)):
+        w_tensors = styles_def_to_tensor([(ws[i], num_layers)])
+        final_w.append(w_tensors[:,i:i+1,:])
+    w_tensors = torch.cat(final_w, dim=1)
+    images = model.GAN.G(w_tensors, noise)
+    images.clamp_(0., 1.)
+    return images
+
+def feed_forward_multistyle(model, noises, img_noises, heightmap_full_resolution):
+    multistyles  = noises_to_multistyles(model, noises, trunc_psi = None)
+    images  = multistyles_to_images(model, multistyles, img_noises) 
+    images = images[:,0:1,:,:]
+    img_resized = F.interpolate(images, 
+    size=[heightmap_full_resolution, heightmap_full_resolution],
+    mode='bicubic', align_corners=False)
+    return get_img_from_tensor(img_resized, nrow=8)
 
 if __name__ == '__main__':
     model = load_latest_model()
