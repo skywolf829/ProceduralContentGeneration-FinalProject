@@ -47,13 +47,13 @@ def request_and_masks_to_losses_and_masks(request_list):
             elif(request_list[spot] == "Exact height"):
                 losses.append(exact_height_loss)
             elif(request_list[spot] == "Decrease vertical alignment"):
-                losses.append(decrease_vertical_orientation_loss)
+                losses.append(decrease_x_slope_loss)
             elif(request_list[spot] == "Increase vertical alignment"):
-                losses.append(increase_vertical_orientation_loss)
+                losses.append(increase_x_slope_loss)
             elif(request_list[spot] == "Decrease horizontal alignment"):
-                losses.append(decrease_horizontal_orientation_loss)
+                losses.append(decrease_y_slope_loss)
             elif(request_list[spot] == "Increase horizontal alignment"):
-                losses.append(increase_horizontal_orientation_loss)
+                losses.append(increase_y_slope_loss)
             elif(request_list[spot] == "Smooth"):
                 losses.append(smoothness_loss)
             elif(request_list[spot] == "Ridged" or \
@@ -268,8 +268,10 @@ if __name__ == '__main__':
                 socket.send_string("finished")
 
             if(message[0] == "all_new_styles"):
-                for res in range(len(multinoises)):
-                    multinoises[res] = torch.randn(num_images, 512).cuda()
+                multinoises[0] = torch.randn(num_images, 512).cuda()
+                multinoises[0].requires_grad = True
+                for res in range(1,len(multinoises)):
+                    multinoises[res] = multinoises[0].detach().clone()
                     multinoises[res].requires_grad = True
 
                 img = feed_forward_multistyle(model, 

@@ -40,7 +40,6 @@ def styles_to_images(model, w, noise):
     w_def = [(w, num_layers)]
 
     w_tensors = styles_def_to_tensor(w_def)
-    print(noise.shape)
     images = model.GAN.G(w_tensors, noise)
     images.clamp_(0., 1.)
     return images
@@ -69,7 +68,7 @@ def laplacian(imgs, device):
 
 def sobel(imgs, axis, device):
     m = nn.ReplicationPad2d(1)
-    if(axis == 0):
+    if(axis == 1):
         weights = torch.tensor(
             np.array([
             [-1/8, 0, 1/8], 
@@ -78,7 +77,7 @@ def sobel(imgs, axis, device):
             ]
         ).astype(np.float32)).to(device)
         
-    elif(axis == 1):
+    elif(axis == 0):
         weights = torch.tensor(
             np.array([
             [-1/8, -1/4, -1/8], 
@@ -120,25 +119,25 @@ def higher_heightmap_loss(imgs, mask=None):
         mask = torch.ones(imgs.shape, device="cuda:0")
     return (-imgs*mask).mean()
 
-def increase_vertical_orientation_loss(imgs, mask=None):
+def increase_y_slope_loss(imgs, mask=None):
     if(mask is None):
         mask = torch.ones(imgs.shape, device="cuda:0")
     sobel_y = torch.abs(sobel(imgs, 0, "cuda:0"))
     return (-sobel_y*mask).mean()
 
-def decrease_vertical_orientation_loss(imgs, mask=None):
+def decrease_y_slope_loss(imgs, mask=None):
     if(mask is None):
         mask = torch.ones(imgs.shape, device="cuda:0")
     sobel_y = torch.abs(sobel(imgs, 0, "cuda:0"))
     return (sobel_y*mask).mean()
 
-def increase_horizontal_orientation_loss(imgs, mask=None):
+def increase_x_slope_loss(imgs, mask=None):
     if(mask is None):
         mask = torch.ones(imgs.shape, device="cuda:0")
     sobel_x = torch.abs(sobel(imgs, 1, "cuda:0"))
     return (-sobel_x*mask).mean()
 
-def decrease_horizontal_orientation_loss(imgs, mask=None):
+def decrease_x_slope_loss(imgs, mask=None):
     if(mask is None):
         mask = torch.ones(imgs.shape, device="cuda:0")
     sobel_x = torch.abs(sobel(imgs, 1, "cuda:0"))
@@ -321,7 +320,7 @@ def feed_forward(model, noise, img_noises, heightmap_full_resolution):
     img_resized = F.interpolate(images, 
     size=[heightmap_full_resolution, heightmap_full_resolution],
     mode='bicubic', align_corners=False)
-    return get_img_from_tensor(img_resized, nrow=8)
+    return get_img_from_tensor(img_resized, nrow=4)
 
 def noises_to_multistyles(model, noises, trunc_psi=0.75):
     ws = []
@@ -344,6 +343,56 @@ def multistyles_to_images(model, ws, noise):
     images.clamp_(0., 1.)
     return images
 
+
+def create_spectrum(model, noise_init, img_noises, loss, mask=None):
+
+    noise = noise_init.detach().clone()
+    noise.requires_grad = True
+    optimizer = optim.Adam([noise], lr=0.001)
+
+    style  = noise_to_styles(model, noise, trunc_psi = None)  # pass through mapping network
+    image  = styles_to_images(model, style, img_noises) # call the generator on intermediate style vectors
+    image = image[:,0:1,:,:]
+
+    imageio.imwrite("startingpoint.png",
+    get_img_from_tensor(image, nrow=1))
+
+    for i in range(1000):
+        optimizer.zero_grad()
+        # Having the default 0.75 trunc_psi causes gradients to be lost, so we must use None
+        style  = noise_to_styles(model, noise, trunc_psi = None)  # pass through mapping network
+        image  = styles_to_images(model, style, img_noises) # call the generator on intermediate style vectors
+        image = image[:,0:1,:,:]
+
+        if((i+1) % 10 == 0):
+            imageio.imwrite("minimize"+str(i+1)+".png",
+            get_img_from_tensor(image, nrow=1))
+        for j in range(len(loss)):
+            l = loss[j](image, mask)
+            l.backward(retain_graph=True)
+        optimizer.step()
+    
+    noise = noise_init.detach().clone()
+    noise.requires_grad = True
+    optimizer = optim.Adam([noise], lr=0.001)
+
+    for i in range(1000):
+        optimizer.zero_grad()
+        # Having the default 0.75 trunc_psi causes gradients to be lost, so we must use None
+        style  = noise_to_styles(model, noise, trunc_psi = None)  # pass through mapping network
+        image  = styles_to_images(model, style, img_noises) # call the generator on intermediate style vectors
+        image = image[:,0:1,:,:]
+
+        if((i+1) % 10 == 0):
+            imageio.imwrite("maximize"+str(i+1)+".png",
+            get_img_from_tensor(image, nrow=1))
+        
+        for j in range(len(loss)):
+            l = -loss[j](image, mask)
+            l.backward(retain_graph=True)
+        optimizer.step()
+        
+
 def feed_forward_multistyle(model, noises, img_noises, heightmap_full_resolution):
     multistyles  = noises_to_multistyles(model, noises, trunc_psi = None)
     images  = multistyles_to_images(model, multistyles, img_noises) 
@@ -354,15 +403,16 @@ def feed_forward_multistyle(model, noises, img_noises, heightmap_full_resolution
     return get_img_from_tensor(img_resized, nrow=8)
 
 if __name__ == '__main__':
+    torch.random.manual_seed(50)
     model = load_latest_model()
 
-    num_image_tiles = 8
+    num_image_tiles = 4
     results_dir = './results'
     name = 'default'
     
     iterations = 100
     img_resolution = 128
-    num_images = 64
+    num_images = 1
 
     noise   = torch.randn(num_images, 512).cuda()    
     img_noises = image_noise(1, 128, device = 0)
@@ -370,5 +420,12 @@ if __name__ == '__main__':
     #losses = [lower_heightmap_loss]
     #masks = [torch.ones([num_images, 1, img_resolution, img_resolution])]
     #imgs_over_time, noise = optimize_on(model, noise, img_noises, losses, masks, iterations)
-    imgs = feed_forward(model, noise, img_noises, 128)
-    imageio.imwrite("random_imgs.png", imgs)
+    #imgs = feed_forward(model, noise, img_noises, 128)
+    #imageio.imwrite("random_imgs.png", imgs)
+
+    #sketch = imageio.imread("SketchExample.png").swapaxes(0,2).swapaxes(1,2).astype(np.float32)
+    #sketch = torch.tensor(sketch[0]).unsqueeze(0).unsqueeze(0).to("cuda:0")
+    #sketch = F.interpolate(sketch, size=[128,128], mode='bilinear', align_corners=True) / 255
+    #imageio.imwrite("sketch_resized.png", get_img_from_tensor(sketch, 1))
+
+    create_spectrum(model, noise, img_noises, [decrease_vertical_orientation_loss, ridgidness_loss])
